@@ -1,0 +1,10 @@
+node_modules/
+.vercel/
+.env.local
+.env
+.env*.local
+!.env.example
+
+# Reference materials (not needed at runtime) — kept locally, not in git history.
+instructions.pdf
+sample.jpg

@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Break the Code</title>
+<meta name="theme-color" content="#17181a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Break the Code">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="breakthecode.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo"><span class="logo-icon">🔍</span><span class="logo-text">BREAK THE CODE</span></div>
+    <div class="hdr-btns">
+      <button class="btn leave-btn hdr-leave" id="leave-game-btn" type="button" style="display:none">LEAVE</button>
+      <button class="btn" id="user-btn" type="button">👤</button>
+    </div>
+  </header>
+
+  <div id="view-home" class="active">
+    <div class="home-title">BREAK THE<br><span class="lock">C&#128274;DE</span></div>
+    <p class="home-sub">Ask the best questions and be the first to crack the code. 2-4 players.</p>
+    <div class="user-badge" id="home-user">Set your name to play</div>
+    <button class="btn btn-primary" id="find-game-btn" type="button">GAME LOBBY</button>
+    <button class="btn" id="return-game-btn" type="button" style="display:none">RETURN TO GAME</button>
+  </div>
+
+  <div id="view-game">
+    <div class="game-stub-title">Game starting soon…</div>
+    <div class="game-stub-players" id="game-stub-players"></div>
+    <p class="mp-hint">The board isn't built yet — lobby only for now.</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="user-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title">WHO ARE YOU?</span>
+      <button class="modal-x" id="user-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="user-input" type="text" maxlength="32" autocomplete="off" placeholder="ENTER NAME">
+      <div class="mp-sec">EXISTING PLAYERS</div>
+      <div id="user-chips"></div>
+      <button class="btn btn-primary" id="user-save" type="button" style="width:100%">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mp-modal">
+  <div class="modal-card">
+    <div id="mp-v-lobby">
+      <div class="modal-hdr">
+        <span class="modal-title">GAME LOBBY</span>
+        <button class="modal-x" id="mp-close" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="mp-active-game-banner" class="mp-inv-banner" style="display:none">
+          <div class="mp-inv-text" id="mp-active-game-text">You have a game in progress.</div>
+          <div class="mp-inv-row">
+            <button class="mp-acc-btn" id="mp-return-btn" type="button">RETURN TO GAME</button>
+            <button class="mp-dec-btn" id="mp-leave-active-btn" type="button">LEAVE GAME</button>
+          </div>
+        </div>
+        <div id="mp-inv-area"></div>
+        <div class="mp-hint" id="mp-lobby-status">Looking for players in the lobby...</div>
+        <div class="mp-sec" id="mp-sec-online" style="display:none">IN LOBBY NOW</div>
+        <div id="mp-lobby-list"></div>
+        <p class="mp-hint" id="mp-invite-hint">Only players who currently have Game Lobby open appear here. Select 1–3 players (2–4 total including you).</p>
+        <button class="btn btn-primary" id="mp-invite-btn" type="button" style="width:100%;margin-top:8px" disabled>INVITE SELECTED</button>
+      </div>
+    </div>
+    <div id="mp-v-waiting" style="display:none">
+      <div class="modal-hdr">
+        <span class="modal-title">WAITING</span>
+        <button class="btn" id="mp-cancel-btn" type="button">CANCEL</button>
+      </div>
+      <div class="modal-body">
+        <div id="mp-wait-list"></div>
+        <p class="mp-hint">Need 2–4 accepted players to start. Select Available players to invite more before starting.</p>
+        <div class="mp-wait-actions" id="mp-wait-actions">
+          <button class="btn btn-primary" id="mp-wait-invite-btn" type="button" style="display:none" disabled>INVITE SELECTED</button>
+          <button class="btn btn-primary" id="mp-start-btn" type="button" disabled>START GAME</button>
+        </div>
+      </div>
+    </div>
+    <div id="mp-v-accepted" style="display:none">
+      <div class="modal-hdr"><span class="modal-title">GET READY</span></div>
+      <div class="modal-body">
+        <p class="mp-hint" id="mp-accepted-msg">Waiting for host...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
+const API_ORIGIN = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+  ? "" : "https://breakthecode.vercel.app";
+const ABLY_KEY = "ojJiew.TwVtNg:Cb6XcfElKgIpu-yNqlWVv3-ayRWw2vjo2JTH2w43mKk";
+const HEARTBEAT_URL = `${API_ORIGIN}/api/bc-heartbeat`;
+const ROOM_URL = `${API_ORIGIN}/api/bc-room`;
+const USERS_URL = `${API_ORIGIN}/api/bc-users`;
+
+const MIN_INVITEES = 1;
+const MAX_INVITEES = 3; // 2-4 players total, including host
+
+let mpRoomId = null;
+let mpRole = null;
+let mpAbly = null;
+let mpLobbyChannel = null;
+let mpRoomChannel = null;
+let mpHeartbeatTimer = null;
+let mpLobbyRefreshTimer = null;
+let mpSelectedPlayers = new Set();
+let mpWaitPlayers = [];
+let mpPendingInvites = [];
+let returningToLobby = false;
+let inActiveGame = false;
+
+function getUsername() {
+  return (localStorage.getItem("bc_username") || "").trim().toLowerCase();
+}
+function setUsername(u) {
+  localStorage.setItem("bc_username", u.trim().toLowerCase());
+}
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+function showView(name) {
+  document.getElementById("view-home").classList.toggle("active", name === "home");
+  document.getElementById("view-game").classList.toggle("active", name === "game");
+  document.getElementById("leave-game-btn").style.display = name === "game" ? "" : "none";
+}
+
+function updateHomeUser() {
+  const u = getUsername();
+  document.getElementById("home-user").textContent = u ? u.toUpperCase() : "Set your name to play";
+}
+
+async function api(url, opts) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+// ── Lobby / multiplayer ─────────────────────────────────────────────────────
+function mpShowMpView(v) {
+  document.getElementById("mp-v-lobby").style.display = v === "lobby" ? "block" : "none";
+  document.getElementById("mp-v-waiting").style.display = v === "waiting" ? "block" : "none";
+  document.getElementById("mp-v-accepted").style.display = v === "accepted" ? "block" : "none";
+}
+
+function seatsTakenInLobby(players = mpWaitPlayers) {
+  return players.filter(
+    (p) => p.status === "accepted" || p.status === "invited" || p.role === "host"
+  ).length;
+}
+
+function updateWaitInviteActions() {
+  const actions = document.getElementById("mp-wait-actions");
+  const inviteBtn = document.getElementById("mp-wait-invite-btn");
+  const startBtn = document.getElementById("mp-start-btn");
+  if (!actions || !inviteBtn || !startBtn) return;
+  const has = mpSelectedPlayers.size > 0;
+  actions.classList.toggle("has-invite", has);
+  // One primary action at a time — never both Invite and Start.
+  inviteBtn.style.display = has ? "" : "none";
+  inviteBtn.disabled = !has;
+  startBtn.style.display = has ? "none" : "";
+}
+
+async function mpHeartbeat() {
+  const u = getUsername();
+  if (!u) return;
+  try {
+    await api(HEARTBEAT_URL, { method: "POST", body: JSON.stringify({ username: u }) });
+  } catch (_) {}
+}
+
+function startHeartbeat() {
+  if (mpHeartbeatTimer) return;
+  mpHeartbeat();
+  mpHeartbeatTimer = setInterval(mpHeartbeat, 8000);
+}
+
+function stopHeartbeat() {
+  if (mpHeartbeatTimer) {
+    clearInterval(mpHeartbeatTimer);
+    mpHeartbeatTimer = null;
+  }
+  const u = getUsername();
+  if (u) {
+    api(HEARTBEAT_URL, {
+      method: "POST",
+      body: JSON.stringify({ username: u, leave: true }),
+    }).catch(() => {});
+  }
+}
+
+/** True while the Game Lobby modal is open (browsing, waiting, or ready). */
+function isInLobbyModal() {
+  return document.getElementById("mp-modal").classList.contains("open");
+}
+
+function mergePendingInvites(invites) {
+  const byRoom = new Map();
+  for (const inv of [...mpPendingInvites, ...(invites || [])]) {
+    if (!inv?.room_id) continue;
+    byRoom.set(inv.room_id, {
+      room_id: inv.room_id,
+      host: inv.host,
+      invitee: inv.invitee || getUsername(),
+    });
+  }
+  mpPendingInvites = [...byRoom.values()];
+}
+
+function mpLoadAbly() {
+  return new Promise((resolve) => {
+    if (window.Ably) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.ably.com/lib/ably.min-2.js";
+    s.onload = () => resolve();
+    document.head.appendChild(s);
+  }).then(() => {
+    if (!mpAbly) mpAbly = new Ably.Realtime({ key: ABLY_KEY });
+  });
+}
+
+function mpSubscribeLobby() {
+  if (mpLobbyChannel) return;
+  mpLobbyChannel = mpAbly.channels.get("bc-lobby");
+  mpLobbyChannel.subscribe("lobby-update", () => {
+    if (document.getElementById("mp-modal").classList.contains("open")) mpLoadLobbyPlayers();
+  });
+  mpLobbyChannel.subscribe("invite", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (d.invitee === getUsername()) {
+      mergePendingInvites([d]);
+      if (isInLobbyModal()) {
+        renderInvites();
+        showToast(`${(d.host || "").toUpperCase()} invited you`);
+      } else {
+        showToast(`${(d.host || "").toUpperCase()} invited you — open Game Lobby`);
+      }
+    }
+  });
+  mpLobbyChannel.subscribe("room-abandoned", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    const rid = d.room_id;
+    if (!rid) return;
+    // Always drop pending invites for this room (invitee may not have accepted yet).
+    const hadPending = mpPendingInvites.some((i) => i.room_id === rid);
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+    if (hadPending) {
+      renderInvites();
+      showToast("Invite cancelled");
+    }
+    if (mpRoomId === rid) {
+      resetLobbyAfterCancel(d.abandoned_by);
+    }
+  });
+  mpLobbyChannel.subscribe("invite-cancelled", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    const rid = d.room_id;
+    if (!rid) return;
+    const hadPending = mpPendingInvites.some((i) => i.room_id === rid);
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+    if (hadPending) {
+      renderInvites();
+      showToast(
+        d.reason === "game_started"
+          ? "Invite withdrawn — game already started"
+          : "Invite cancelled"
+      );
+    }
+  });
+}
+
+function mpSubscribeRoom(roomId) {
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+  }
+  mpRoomChannel = mpAbly.channels.get(`bc-room-${roomId}`);
+  mpRoomChannel.subscribe("game-start", () => {
+    document.getElementById("mp-modal").classList.remove("open");
+    enterGame();
+  });
+  mpRoomChannel.subscribe("player-status", async () => {
+    if (mpRole === "host") await refreshWaiting();
+  });
+  mpRoomChannel.subscribe("room-abandoned", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (inActiveGame) handleLeftOrAbandoned(d.abandoned_by);
+    else resetLobbyAfterCancel(d.abandoned_by);
+  });
+}
+
+async function enterGame() {
+  showView("game");
+  inActiveGame = true;
+  stopHeartbeat();
+  if (mpLobbyRefreshTimer) {
+    clearInterval(mpLobbyRefreshTimer);
+    mpLobbyRefreshTimer = null;
+  }
+  document.getElementById("mp-modal").classList.remove("open");
+  try {
+    const data = await api(`${ROOM_URL}?room_id=${mpRoomId}`);
+    const players = (data.players || []).filter((p) => p.status !== "left" && p.status !== "declined");
+    document.getElementById("game-stub-players").innerHTML = players.map((p) =>
+      `<span class="player-chip${p.role === "host" ? " host" : ""}">${p.username.toUpperCase()}</span>`
+    ).join("");
+  } catch (_) {}
+}
+
+function lobbyPresenceLabel(status) {
+  const map = {
+    available: "Available",
+    host: "Host",
+    ready: "✓ Ready",
+    waiting: "Waiting…",
+    offline: "Offline",
+  };
+  return map[status] || status;
+}
+
+async function mpLoadLobbyPlayers() {
+  try {
+    const data = await api(HEARTBEAT_URL);
+    const me = getUsername();
+    const list = document.getElementById("mp-lobby-list");
+    // Everyone currently in the lobby space (including you) — not just inviteable people.
+    const players = (data.players || []).filter((p) => p.status && p.status !== "offline");
+    const inviteable = players.filter(
+      (p) => p.username !== me && p.status === "available"
+    );
+    for (const u of [...mpSelectedPlayers]) {
+      if (!inviteable.some((p) => p.username === u)) mpSelectedPlayers.delete(u);
+    }
+    document.getElementById("mp-sec-online").style.display = players.length ? "block" : "none";
+    document.getElementById("mp-lobby-status").style.display = players.length ? "none" : "block";
+    document.getElementById("mp-lobby-status").textContent = "Looking for players in the lobby...";
+    const hint = document.getElementById("mp-invite-hint");
+    if (hint) {
+      hint.textContent =
+        "Players in Game Lobby appear here. Select Available players to invite (1–3). Host / Ready are visible but not selectable. Players in an active game are hidden.";
+    }
+    list.innerHTML = players.map((p) => {
+      const isMe = p.username === me;
+      const canSelect = !isMe && p.status === "available";
+      const sel = canSelect && mpSelectedPlayers.has(p.username) ? "selected" : "";
+      const clickable = canSelect ? " selectable" : "";
+      const you = isMe ? " (YOU)" : "";
+      return `<div class="mp-row${clickable} ${sel}" data-user="${p.username}" data-selectable="${canSelect ? "1" : "0"}"><span>${p.username.toUpperCase()}${you}</span><span class="st">${lobbyPresenceLabel(p.status)}</span></div>`;
+    }).join("");
+    list.querySelectorAll(".mp-row[data-selectable='1']").forEach((row) => {
+      row.addEventListener("click", () => {
+        const u = row.dataset.user;
+        if (mpSelectedPlayers.has(u)) mpSelectedPlayers.delete(u);
+        else if (mpSelectedPlayers.size < MAX_INVITEES) mpSelectedPlayers.add(u);
+        document.getElementById("mp-invite-btn").disabled = mpSelectedPlayers.size < MIN_INVITEES;
+        mpLoadLobbyPlayers();
+      });
+    });
+    document.getElementById("mp-invite-btn").disabled = mpSelectedPlayers.size < MIN_INVITEES;
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+async function renderWaitingList() {
+  const list = document.getElementById("mp-wait-list");
+  if (!list || !mpRoomId || mpRole !== "host") return;
+
+  let lobbyAvailable = [];
+  try {
+    const data = await api(HEARTBEAT_URL);
+    const me = getUsername();
+    lobbyAvailable = (data.players || []).filter(
+      (p) => p.username !== me && p.status === "available"
+    );
+  } catch (_) {}
+
+  const inRoom = new Map(
+    mpWaitPlayers.map((p) => [p.username.toLowerCase(), p])
+  );
+  // Room members first (host / ready / waiting / declined), then newcomers still Available.
+  const rows = [...mpWaitPlayers];
+  for (const p of lobbyAvailable) {
+    if (!inRoom.has(p.username.toLowerCase())) {
+      rows.push({ username: p.username, role: "player", status: "available" });
+    }
+  }
+
+  const selectable = new Set(
+    rows
+      .filter((p) => p.status === "available" || p.status === "declined")
+      .map((p) => p.username.toLowerCase())
+  );
+  for (const u of [...mpSelectedPlayers]) {
+    if (!selectable.has(u)) mpSelectedPlayers.delete(u);
+  }
+
+  const seatsLeft = Math.max(0, MAX_INVITEES + 1 - seatsTakenInLobby());
+
+  list.innerHTML = rows.map((p) => {
+    const canSelect = p.status === "available" || p.status === "declined";
+    const sel = canSelect && mpSelectedPlayers.has(p.username) ? "selected" : "";
+    const clickable = canSelect ? " selectable" : "";
+    const cls =
+      p.status === "declined" ? "st declined" :
+      p.status === "available" ? "st available" : "st";
+    const hostTag = p.role === "host" ? " (HOST)" : "";
+    return `<div class="mp-row${clickable} ${sel}" data-user="${p.username}" data-selectable="${canSelect ? "1" : "0"}"><span>${p.username.toUpperCase()}${hostTag}</span><span class="${cls}">${waitStatusLabel(p)}</span></div>`;
+  }).join("");
+
+  list.querySelectorAll(".mp-row[data-selectable='1']").forEach((row) => {
+    row.addEventListener("click", () => {
+      const u = row.dataset.user;
+      if (mpSelectedPlayers.has(u)) mpSelectedPlayers.delete(u);
+      else if (mpSelectedPlayers.size < Math.max(1, seatsLeft)) mpSelectedPlayers.add(u);
+      else showToast(`Lobby can hold ${MAX_INVITEES + 1} players total`);
+      updateWaitInviteActions();
+      renderWaitingList();
+    });
+  });
+
+  const accepted = mpWaitPlayers.filter(
+    (p) => p.status === "accepted" || p.role === "host"
+  ).length;
+  document.getElementById("mp-start-btn").disabled = accepted < 2;
+  updateWaitInviteActions();
+}
+
+function renderInvites() {
+  const area = document.getElementById("mp-inv-area");
+  const me = getUsername();
+  const invites = mpPendingInvites.filter((i) => i.invitee === me);
+  area.innerHTML = invites.map((inv, idx) => `
+    <div class="mp-inv-banner">
+      <div>${(inv.host || "").toUpperCase()} invited you to Break the Code</div>
+      <div class="mp-inv-row">
+        <button class="mp-acc-btn" data-idx="${idx}" data-act="accept">ACCEPT</button>
+        <button class="mp-dec-btn" data-idx="${idx}" data-act="decline">DECLINE</button>
+      </div>
+    </div>`).join("");
+  area.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const inv = mpPendingInvites[Number(btn.dataset.idx)];
+      if (!inv) return;
+      try {
+        await api(ROOM_URL, {
+          method: "PATCH",
+          body: JSON.stringify({
+            action: btn.dataset.act,
+            room_id: inv.room_id,
+            username: me,
+          }),
+        });
+        mpPendingInvites = mpPendingInvites.filter((x) => x.room_id !== inv.room_id);
+        renderInvites();
+        if (btn.dataset.act === "accept") {
+          mpRoomId = inv.room_id;
+          mpRole = "player";
+          mpSubscribeRoom(mpRoomId);
+          mpShowMpView("accepted");
+        }
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
+  });
+}
+
+function waitStatusLabel(p) {
+  if (p.role === "host") return "Host";
+  const map = {
+    accepted: "✓ Ready",
+    invited: "Waiting…",
+    declined: "Declined",
+    available: "Available",
+    left: "Left",
+    playing: "Playing",
+  };
+  return map[p.status] || p.status;
+}
+
+function lobbyCancelConfirmMessage(players = mpWaitPlayers) {
+  const pending = players.some((p) => p.status === "invited");
+  const guestsReady = players.some(
+    (p) => p.role !== "host" && (p.status === "accepted" || p.status === "playing")
+  );
+  if (pending) return "Cancel this lobby? Pending invites will be withdrawn.";
+  if (guestsReady) return "Cancel this lobby? Accepted players will leave.";
+  return "Cancel this lobby?";
+}
+
+/** No pending invites and no accepted guests — back to Game Lobby to invite again. */
+async function returnToGameLobbyNoInvites() {
+  if (returningToLobby) return;
+  returningToLobby = true;
+  const rid = mpRoomId;
+  const me = getUsername();
+  mpRoomId = null;
+  mpRole = null;
+  mpWaitPlayers = [];
+  mpSelectedPlayers = new Set();
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+    mpRoomChannel = null;
+  }
+  if (rid) {
+    try {
+      await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon", room_id: rid, username: me }),
+      });
+    } catch (_) {}
+  }
+  document.getElementById("mp-active-game-banner").style.display = "none";
+  document.getElementById("return-game-btn").style.display = "none";
+  document.getElementById("mp-modal").classList.add("open");
+  mpShowMpView("lobby");
+  renderInvites();
+  startHeartbeat();
+  await mpLoadLobbyPlayers();
+  showToast("All invites declined — select players to invite again");
+  returningToLobby = false;
+}
+
+async function refreshWaiting() {
+  if (!mpRoomId || returningToLobby) return;
+  const data = await api(`${ROOM_URL}?room_id=${mpRoomId}`);
+  mpWaitPlayers = data.players || [];
+
+  const hasPending = mpWaitPlayers.some((p) => p.status === "invited");
+  const hasAcceptedGuest = mpWaitPlayers.some(
+    (p) => p.role !== "host" && p.status === "accepted"
+  );
+  if (!hasPending && !hasAcceptedGuest) {
+    await returnToGameLobbyNoInvites();
+    return;
+  }
+
+  await renderWaitingList();
+}
+
+function showLobbyWaitingView() {
+  mpSelectedPlayers = new Set();
+  updateWaitInviteActions();
+  mpShowMpView("waiting");
+  refreshWaiting();
+}
+
+async function openFindGame() {
+  if (!getUsername()) {
+    document.getElementById("user-modal").classList.add("open");
+    return;
+  }
+  await mpLoadAbly();
+  mpSubscribeLobby();
+  startHeartbeat();
+  mpSelectedPlayers = new Set();
+  document.getElementById("mp-modal").classList.add("open");
+  mpShowMpView("lobby");
+
+  try {
+    const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+    mergePendingInvites(active.pending_invites || []);
+
+    const banner = document.getElementById("mp-active-game-banner");
+    // Only "return" for games you're already in (accepted/host/playing) — not bare invites.
+    if (
+      active.room_id &&
+      (active.room?.status === "active" || active.room?.status === "lobby") &&
+      active.player_status &&
+      active.player_status !== "invited"
+    ) {
+      mpRoomId = active.room_id;
+      mpRole = active.role;
+      if (active.room?.status === "lobby") {
+        // Resume waiting UI — don't show "game in progress" for an unstarted lobby.
+        banner.style.display = "none";
+        document.getElementById("return-game-btn").style.display = "none";
+        if (active.role === "host" || active.player_status === "accepted") {
+          if (active.role === "host") showLobbyWaitingView();
+          else mpShowMpView("accepted");
+        }
+      } else {
+        banner.style.display = "block";
+        document.getElementById("mp-active-game-text").textContent =
+          'You have a game in progress.';
+        document.getElementById("return-game-btn").style.display = "";
+      }
+    } else {
+      banner.style.display = "none";
+    }
+  } catch (_) {
+    document.getElementById("mp-active-game-banner").style.display = "none";
+  }
+
+  await mpLoadLobbyPlayers();
+  renderInvites();
+  if (mpLobbyRefreshTimer) clearInterval(mpLobbyRefreshTimer);
+  mpLobbyRefreshTimer = setInterval(() => {
+    if (document.getElementById("mp-v-waiting").style.display !== "none") {
+      renderWaitingList();
+    } else {
+      mpLoadLobbyPlayers();
+    }
+  }, 5000);
+}
+
+async function mpLeaveGame() {
+  if (!mpRoomId) return;
+  const msg = inActiveGame
+    ? "Leave this game? Others will keep playing."
+    : lobbyCancelConfirmMessage();
+  if (!confirm(msg)) return;
+  const me = getUsername();
+  try {
+    if (inActiveGame) {
+      const data = await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: me }),
+      });
+      handleLeftOrAbandoned(me);
+    } else {
+      await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: me }),
+      });
+      resetLobbyAfterCancel(me);
+    }
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+/** Host cancelled lobby / room abandoned while still in lobby UI. */
+function resetLobbyAfterCancel(by) {
+  // Idempotent: Ably may deliver room-abandoned on both lobby + room channels.
+  if (!mpRoomId && !mpRoomChannel) return;
+  const rid = mpRoomId;
+  mpRoomId = null;
+  mpRole = null;
+  if (rid) {
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+  }
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+    mpRoomChannel = null;
+  }
+  document.getElementById("mp-active-game-banner").style.display = "none";
+  document.getElementById("return-game-btn").style.display = "none";
+  if (isInLobbyModal()) {
+    mpShowMpView("lobby");
+    renderInvites();
+    mpLoadLobbyPlayers();
+    startHeartbeat();
+  } else {
+    document.getElementById("mp-modal").classList.remove("open");
+    showView("home");
+  }
+  const me = getUsername();
+  if (by && by === me) showToast("Lobby cancelled");
+  else if (by) showToast(`${String(by).toUpperCase()} cancelled the lobby`);
+}
+
+function handleLeftOrAbandoned(by) {
+  mpRoomId = null;
+  mpRole = null;
+  inActiveGame = false;
+  mpPendingInvites = [];
+  document.getElementById("mp-modal").classList.remove("open");
+  document.getElementById("mp-active-game-banner").style.display = "none";
+  document.getElementById("return-game-btn").style.display = "none";
+  showView("home");
+  if (by && by !== getUsername()) showToast(`${String(by).toUpperCase()} left`);
+  else showToast("Left game");
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────
+document.getElementById("user-btn").addEventListener("click", async () => {
+  document.getElementById("user-input").value = getUsername();
+  document.getElementById("user-modal").classList.add("open");
+  try {
+    const data = await api(USERS_URL);
+    document.getElementById("user-chips").innerHTML = (data.users || []).map((u) =>
+      `<span class="user-chip" data-u="${u}">${u.toUpperCase()}</span>`
+    ).join("");
+    document.querySelectorAll(".user-chip").forEach((c) => {
+      c.addEventListener("click", () => {
+        document.getElementById("user-input").value = c.dataset.u;
+      });
+    });
+  } catch (_) {}
+});
+document.getElementById("user-close").addEventListener("click", () => {
+  document.getElementById("user-modal").classList.remove("open");
+});
+document.getElementById("user-save").addEventListener("click", () => {
+  const u = document.getElementById("user-input").value.trim().toLowerCase();
+  if (!u) return showToast("Enter a name");
+  setUsername(u);
+  updateHomeUser();
+  document.getElementById("user-modal").classList.remove("open");
+});
+
+document.getElementById("find-game-btn").addEventListener("click", openFindGame);
+document.getElementById("mp-close").addEventListener("click", () => {
+  // Keep heartbeat while you still have a lobby room or are waiting/accepted.
+  const keeping =
+    !!mpRoomId ||
+    document.getElementById("mp-v-waiting").style.display !== "none" ||
+    document.getElementById("mp-v-accepted").style.display !== "none";
+  document.getElementById("mp-modal").classList.remove("open");
+  if (!keeping) {
+    stopHeartbeat();
+    if (mpLobbyRefreshTimer) {
+      clearInterval(mpLobbyRefreshTimer);
+      mpLobbyRefreshTimer = null;
+    }
+  }
+});
+document.getElementById("mp-invite-btn").addEventListener("click", async () => {
+  if (!mpSelectedPlayers.size) return;
+  const invitees = [...mpSelectedPlayers];
+  try {
+    const data = await api(ROOM_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        username: getUsername(),
+        invitees,
+      }),
+    });
+    mpRoomId = data.room_id;
+    mpRole = "host";
+    mpSelectedPlayers = new Set();
+    await mpLoadAbly();
+    mpSubscribeRoom(mpRoomId);
+    showLobbyWaitingView();
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("mp-wait-invite-btn").addEventListener("click", async () => {
+  if (!mpRoomId || !mpSelectedPlayers.size) return;
+  const invitees = [...mpSelectedPlayers];
+  try {
+    const data = await api(ROOM_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "invite",
+        room_id: mpRoomId,
+        username: getUsername(),
+        invitees,
+      }),
+    });
+    mpSelectedPlayers = new Set();
+    if (data.players) mpWaitPlayers = data.players;
+    updateWaitInviteActions();
+    await refreshWaiting();
+    showToast(`Invited ${invitees.map((u) => u.toUpperCase()).join(", ")}`);
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("mp-start-btn").addEventListener("click", async () => {
+  const pending = mpWaitPlayers.filter((p) => p.status === "invited");
+  if (pending.length) {
+    const names = pending.map((p) => p.username.toUpperCase()).join(", ");
+    if (
+      !confirm(
+        `${names} ${pending.length === 1 ? "hasn't" : "haven't"} accepted yet. Start without them? Their invite will be cancelled.`
+      )
+    ) {
+      return;
+    }
+  }
+  try {
+    await api(ROOM_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "start", room_id: mpRoomId, username: getUsername() }),
+    });
+    document.getElementById("mp-modal").classList.remove("open");
+    await enterGame();
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("mp-cancel-btn").addEventListener("click", async () => {
+  if (!mpRoomId) return;
+  if (!confirm(lobbyCancelConfirmMessage())) return;
+  const me = getUsername();
+  const rid = mpRoomId;
+  try {
+    await api(ROOM_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "abandon", room_id: rid, username: me }),
+    });
+  } catch (err) {
+    showToast(err.message);
+  }
+  resetLobbyAfterCancel(me);
+});
+document.getElementById("mp-return-btn").addEventListener("click", async () => {
+  document.getElementById("mp-modal").classList.remove("open");
+  await mpLoadAbly();
+  mpSubscribeRoom(mpRoomId);
+  const data = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+  if (data.room?.status === "lobby") {
+    mpRole = data.role;
+    if (data.role === "host") showLobbyWaitingView();
+    else {
+      document.getElementById("mp-modal").classList.add("open");
+      mpShowMpView("accepted");
+    }
+  } else {
+    await enterGame();
+  }
+});
+document.getElementById("mp-leave-active-btn").addEventListener("click", mpLeaveGame);
+document.getElementById("return-game-btn").addEventListener("click", async () => {
+  const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+  if (!active.room_id) return showToast("No active game");
+  mpRoomId = active.room_id;
+  mpRole = active.role;
+  await mpLoadAbly();
+  mpSubscribeRoom(mpRoomId);
+  if (active.room?.status === "lobby") openFindGame();
+  else enterGame();
+});
+document.getElementById("leave-game-btn").addEventListener("click", mpLeaveGame);
+
+window.addEventListener("resize", () => {});
+
+(async function init() {
+  updateHomeUser();
+  // Do not heartbeat on the home screen — you only appear available inside Game Lobby.
+  if (getUsername()) {
+    try {
+      const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+      if (active.room_id && active.room?.status === "active") {
+        document.getElementById("return-game-btn").style.display = "";
+        mpRoomId = active.room_id;
+        mpRole = active.role;
+      }
+      if (active.pending_invites?.length) {
+        mergePendingInvites(active.pending_invites);
+        showToast("You have a game invite — open Game Lobby");
+      }
+    } catch (_) {}
+  }
+})();
+</script>
+</body>
+</html>
