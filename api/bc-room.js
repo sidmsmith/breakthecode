@@ -290,73 +290,8 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, players: updated.players });
       }
 
-      // Host starts the game — no game engine yet, so this just flips the room to
-      // 'active' and cancels any invites that never got accepted.
-      if (action === "start") {
-        const { room, players } = await getRoomWithPlayers(client, room_id);
-        if (!room) return res.status(404).json({ error: "room not found" });
-        if (room.status !== "lobby") {
-          return res.status(400).json({ error: "That lobby is no longer open." });
-        }
-        if (String(room.host_username).toLowerCase() !== user) {
-          return res.status(403).json({ error: "Only the host can start the game" });
-        }
-        const seated = players.filter(
-          (p) => p.role === "host" || p.status === "accepted"
-        ).length;
-        if (seated < MIN_PLAYERS) {
-          return res.status(400).json({
-            error: `Need at least ${MIN_PLAYERS} players to start.`,
-          });
-        }
-
-        const cancelledInvites = players
-          .filter((p) => p.status === "invited")
-          .map((p) => p.username);
-
-        await client.query(
-          `UPDATE bc_room_players SET status='left' WHERE room_id=$1 AND status='invited'`,
-          [room_id]
-        );
-        await client.query(
-          `UPDATE bc_rooms SET status='active', started_at=NOW() WHERE id=$1`,
-          [room_id]
-        );
-        for (const invitee of cancelledInvites) {
-          await ablyPublish(LOBBY_CHANNEL, "invite-cancelled", {
-            room_id,
-            invitee,
-            reason: "game_started",
-          });
-        }
-        const updated = await getRoomWithPlayers(client, room_id);
-        await ablyPublish(roomChannel(room_id), "game-start", { players: updated.players });
-        return res.status(200).json({ ok: true, players: updated.players, cancelled_invites: cancelledInvites });
-      }
-
-      // A single player leaving an already-active room (others keep going).
-      if (action === "leave") {
-        const { room, players } = await getRoomWithPlayers(client, room_id);
-        if (!room) return res.status(404).json({ error: "room not found" });
-        await client.query(
-          `UPDATE bc_room_players SET status='left' WHERE room_id=$1 AND username=$2`,
-          [room_id, user]
-        );
-        const remaining = players.filter(
-          (p) => p.username !== user && (p.status === "accepted" || p.role === "host")
-        );
-        if (remaining.length < MIN_PLAYERS) {
-          await client.query(
-            `UPDATE bc_rooms SET status='abandoned', ended_at=NOW() WHERE id=$1`,
-            [room_id]
-          );
-          await ablyPublish(roomChannel(room_id), "room-abandoned", { room_id, abandoned_by: user });
-          return res.status(200).json({ ok: true, ended: true });
-        }
-        const updated = await getRoomWithPlayers(client, room_id);
-        await ablyPublish(roomChannel(room_id), "player-status", { players: updated.players });
-        return res.status(200).json({ ok: true, players: updated.players });
-      }
+      // "start" (deals tiles, builds the game engine state) and "leave" (departing
+      // an already-active game) are handled by bc-game.js, which owns game_state.
 
       if (action === "abandon") {
         await client.query(

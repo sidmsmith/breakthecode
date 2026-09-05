@@ -107,29 +107,172 @@ header {
   font-weight: 600;
 }
 
-/* Game shell (stub) */
+/* Game board — designed landscape-first (wide, short viewport). */
+#app:has(#view-game.active) { max-width: 900px; }
+
 #view-game {
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  text-align: center;
+  gap: 8px;
+  min-height: 0;
 }
-.game-stub-title { font-size: 1.3rem; font-weight: 800; }
-.game-stub-players {
+
+.turn-bar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
+.turn-status { font-weight: 800; font-size: 1rem; letter-spacing: 0.02em; }
+.opp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
 .player-chip {
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 .player-chip.host { border-color: var(--accent); color: var(--accent); }
+.player-chip.won { border-color: var(--ok); color: var(--ok); }
+.player-chip.lost { border-color: var(--bad); color: var(--bad); opacity: 0.7; }
+
+.board-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+}
+.panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-left { flex: 0 0 40%; }
+.panel-right { flex: 1; min-width: 0; }
+.panel-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.deck-count { font-weight: 500; color: var(--muted); font-size: 0.65rem; }
+
+.hand-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tile {
+  width: 42px;
+  height: 52px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.tile-pos { font-size: 0.55rem; opacity: 0.7; line-height: 1; }
+.tile-num { font-size: 1.15rem; line-height: 1.2; }
+.tile-black { background: #111; color: #fff; }
+.tile-white { background: #f2f2f0; color: #111; }
+.tile-green { background: var(--accent); color: #0d1a08; }
+
+.target-info { font-size: 0.75rem; color: var(--muted); }
+.btn-guess { padding: 12px; font-size: 0.95rem; }
+
+.card-board {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  flex-shrink: 0;
+}
+.card-btn {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.25;
+}
+.card-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.card-btn:not(:disabled):hover { border-color: var(--accent); }
+
+.log-title { margin-top: 4px; }
+.log-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 2px;
+}
+.log-entry {
+  font-size: 0.72rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  line-height: 1.35;
+}
+.log-entry.log-empty { color: var(--muted); text-align: center; }
+.log-answers { color: var(--muted); margin-top: 2px; }
+.log-entry.log-correct { border-color: var(--ok); }
+.log-entry.log-wrong { border-color: var(--bad); }
+
+/* Guess modal */
+.guess-slots { display: flex; flex-direction: column; gap: 8px; }
+.guess-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guess-slot-label {
+  width: 18px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.guess-num {
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 0.9rem;
+}
+.guess-color { display: flex; gap: 4px; flex: 1; }
+.color-btn {
+  flex: 1;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.color-btn.selected { border-color: var(--accent); background: var(--accent); color: #0d1a08; }
+.color-btn.white.selected { background: #f2f2f0; color: #111; border-color: #f2f2f0; }
+
+#gameover-title { font-size: 1.3rem; font-weight: 800; text-align: center; margin-bottom: 10px; }
+#gameover-body { margin-bottom: 14px; }
+#gameover-body .hand-row { justify-content: center; }
+#gameover-body .panel-title { justify-content: center; margin-bottom: 6px; }
 
 /* Modals */
 .modal-overlay {

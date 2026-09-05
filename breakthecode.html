@@ -33,9 +33,48 @@
   </div>
 
   <div id="view-game">
-    <div class="game-stub-title">Game starting soon…</div>
-    <div class="game-stub-players" id="game-stub-players"></div>
-    <p class="mp-hint">The board isn't built yet — lobby only for now.</p>
+    <div class="turn-bar">
+      <div class="turn-status" id="turn-status">Loading…</div>
+      <div class="opp-chips" id="opp-chips"></div>
+    </div>
+    <div class="board-layout">
+      <div class="panel panel-left">
+        <div class="panel-title">YOUR TILES</div>
+        <div class="hand-row" id="hand-row"></div>
+        <div class="target-info" id="target-info"></div>
+        <button class="btn btn-primary btn-guess" id="guess-btn" type="button">GUESS</button>
+      </div>
+      <div class="panel panel-right">
+        <div class="panel-title">QUESTIONS <span class="deck-count" id="deck-count"></span></div>
+        <div class="card-board" id="card-board"></div>
+        <div class="panel-title log-title">HISTORY</div>
+        <div class="log-list" id="log-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="guess-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title" id="guess-title">GUESS THE TILES</span>
+      <button class="modal-x" id="guess-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="guess-slots" id="guess-slots"></div>
+      <p class="mp-hint" id="guess-error"></p>
+      <button class="btn btn-primary" id="guess-submit" type="button" style="width:100%">SUBMIT GUESS</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gameover-modal">
+  <div class="modal-card">
+    <div class="modal-body">
+      <div id="gameover-title"></div>
+      <div id="gameover-body"></div>
+      <button class="btn btn-primary" id="gameover-close" type="button" style="width:100%">BACK TO HOME</button>
+    </div>
   </div>
 </div>
 
@@ -114,6 +153,7 @@ const API_ORIGIN = location.hostname === "localhost" || location.hostname === "1
 const ABLY_KEY = "ojJiew.TwVtNg:Cb6XcfElKgIpu-yNqlWVv3-ayRWw2vjo2JTH2w43mKk";
 const HEARTBEAT_URL = `${API_ORIGIN}/api/bc-heartbeat`;
 const ROOM_URL = `${API_ORIGIN}/api/bc-room`;
+const GAME_URL = `${API_ORIGIN}/api/bc-game`;
 const USERS_URL = `${API_ORIGIN}/api/bc-users`;
 
 const MIN_INVITEES = 1;
@@ -316,6 +356,9 @@ function mpSubscribeRoom(roomId) {
   mpRoomChannel.subscribe("player-status", async () => {
     if (mpRole === "host") await refreshWaiting();
   });
+  mpRoomChannel.subscribe("state-update", () => {
+    if (inActiveGame) refreshGameState();
+  });
   mpRoomChannel.subscribe("room-abandoned", (msg) => {
     let d = msg.data;
     if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
@@ -333,14 +376,259 @@ async function enterGame() {
     mpLobbyRefreshTimer = null;
   }
   document.getElementById("mp-modal").classList.remove("open");
-  try {
-    const data = await api(`${ROOM_URL}?room_id=${mpRoomId}`);
-    const players = (data.players || []).filter((p) => p.status !== "left" && p.status !== "declined");
-    document.getElementById("game-stub-players").innerHTML = players.map((p) =>
-      `<span class="player-chip${p.role === "host" ? " host" : ""}">${p.username.toUpperCase()}</span>`
-    ).join("");
-  } catch (_) {}
+  startGamePoll();
+  await refreshGameState();
 }
+
+let gamePollTimer = null;
+function startGamePoll() {
+  stopGamePoll();
+  // Safety net if an Ably ping is missed (e.g. tab backgrounded).
+  gamePollTimer = setInterval(() => {
+    if (!inActiveGame || !mpRoomId) return;
+    refreshGameState();
+  }, 3000);
+}
+function stopGamePoll() {
+  if (gamePollTimer) {
+    clearInterval(gamePollTimer);
+    gamePollTimer = null;
+  }
+}
+
+let gameState = null;
+async function refreshGameState() {
+  if (!mpRoomId) return;
+  try {
+    const data = await api(`${GAME_URL}?room_id=${mpRoomId}&username=${encodeURIComponent(getUsername())}`);
+    if (data.state) {
+      gameState = data.state;
+      renderGame(gameState);
+    }
+  } catch (err) {
+    // keep last good frame; a transient fetch failure shouldn't blank the board
+  }
+}
+
+const COLOR_STYLE = { black: "tile-black", white: "tile-white", green: "tile-green" };
+
+function tileSpan(t) {
+  return `<div class="tile ${COLOR_STYLE[t.color]}"><span class="tile-pos">${t.position || ""}</span><span class="tile-num">${t.num}</span></div>`;
+}
+
+function renderGame(state) {
+  if (!state) return;
+  const me = getUsername();
+
+  if (state.phase === "game_over") {
+    stopGamePoll();
+    showGameOver(state);
+  }
+
+  const myTurn = state.currentPlayer === me;
+  let statusText;
+  if (state.phase === "final_chance") {
+    statusText = state.finalChanceUsername === me
+      ? "FINAL CHANCE — guess now!"
+      : `${state.finalChanceUsername.toUpperCase()} gets one last guess…`;
+  } else if (state.phase === "game_over") {
+    statusText = "Game over";
+  } else {
+    statusText = myTurn ? "YOUR TURN" : `${state.currentPlayer.toUpperCase()}'S TURN`;
+  }
+  document.getElementById("turn-status").textContent = statusText;
+
+  const oppChips = document.getElementById("opp-chips");
+  if (state.playerCount === 2) {
+    const o = state.opponent;
+    const tag = state.turnOrder[0] === o.username ? " (started)" : "";
+    oppChips.innerHTML = `<span class="player-chip">${o.username.toUpperCase()}${tag}</span>`;
+  } else {
+    oppChips.innerHTML = state.opponents.map((o) => {
+      const cls = o.decided === "won" ? "won" : o.decided === "lost" ? "lost" : "";
+      const label = o.decided === "won" ? " ✓" : o.decided === "lost" ? " ✕" : "";
+      return `<span class="player-chip ${cls}">${o.username.toUpperCase()}${label}</span>`;
+    }).join("");
+  }
+
+  document.getElementById("hand-row").innerHTML = (state.myHand || []).map(tileSpan).join("");
+
+  const targetInfo = document.getElementById("target-info");
+  if (state.playerCount === 2) {
+    targetInfo.textContent = `Guess ${state.opponent.username.toUpperCase()}'s ${state.opponent.tileCount} tiles to win.`;
+  } else {
+    targetInfo.textContent = `Guess the ${state.centralCount} hidden central tiles to win. One guess only!`;
+  }
+
+  document.getElementById("deck-count").textContent = `(${state.deckRemaining} left in draw pile)`;
+  const board = document.getElementById("card-board");
+  const canAct = state.phase === "playing" && myTurn;
+  board.innerHTML = state.board.map((c) =>
+    `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>${c.text}</button>`
+  ).join("");
+  board.querySelectorAll(".card-btn").forEach((btn) => {
+    btn.addEventListener("click", () => askCard(btn.dataset.card));
+  });
+
+  const guessBtn = document.getElementById("guess-btn");
+  const canGuess =
+    (state.phase === "playing" && myTurn) ||
+    (state.phase === "final_chance" && state.finalChanceUsername === me);
+  guessBtn.disabled = !canGuess;
+
+  const log = document.getElementById("log-list");
+  log.innerHTML = state.log.slice().reverse().map((entry) => {
+    if (entry.type === "guess") {
+      const cls = entry.correct ? "log-correct" : "log-wrong";
+      return `<div class="log-entry ${cls}">#${entry.turnNumber} ${entry.username.toUpperCase()} guessed — ${entry.correct ? "CORRECT!" : "wrong"}</div>`;
+    }
+    const answers = entry.answers.map((a) => `${a.username.toUpperCase()}: ${a.answerText}`).join(" · ");
+    return `<div class="log-entry">#${entry.turnNumber} ${entry.askedBy.toUpperCase()} asked: "${entry.cardText}"<div class="log-answers">${answers}</div></div>`;
+  }).join("") || `<div class="log-entry log-empty">No questions asked yet.</div>`;
+}
+
+async function askCard(cardId) {
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "ask", room_id: mpRoomId, username: getUsername(), cardId }),
+    });
+    if (data.state) {
+      gameState = data.state;
+      renderGame(gameState);
+    }
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+// ── Guess modal ──────────────────────────────────────────────────────────────
+function guessSlotCount() {
+  if (!gameState) return 0;
+  return gameState.playerCount === 2 ? gameState.opponent.tileCount : gameState.centralCount;
+}
+
+function openGuessModal() {
+  if (!gameState) return;
+  const n = guessSlotCount();
+  document.getElementById("guess-title").textContent =
+    gameState.playerCount === 2
+      ? `GUESS ${gameState.opponent.username.toUpperCase()}'S TILES`
+      : "GUESS THE CENTRAL TILES";
+  const slots = document.getElementById("guess-slots");
+  slots.innerHTML = "";
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement("div");
+    row.className = "guess-slot";
+    row.innerHTML = `
+      <span class="guess-slot-label">${String.fromCharCode(97 + i)}</span>
+      <select class="guess-num" data-i="${i}">
+        ${Array.from({ length: 10 }, (_, num) => `<option value="${num}">${num}</option>`).join("")}
+      </select>
+      <div class="guess-color" data-i="${i}">
+        <button type="button" class="color-btn black selected" data-color="black">BLACK</button>
+        <button type="button" class="color-btn white" data-color="white">WHITE</button>
+      </div>`;
+    slots.appendChild(row);
+  }
+  slots.querySelectorAll(".guess-num").forEach((sel) => {
+    sel.addEventListener("change", () => syncColorOptions(sel));
+  });
+  slots.querySelectorAll(".guess-color").forEach((grp) => {
+    grp.querySelectorAll(".color-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        grp.querySelectorAll(".color-btn").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+      });
+    });
+  });
+  document.getElementById("guess-error").textContent = "";
+  document.getElementById("guess-modal").classList.add("open");
+}
+
+function syncColorOptions(sel) {
+  const grp = sel.closest(".guess-slot").querySelector(".guess-color");
+  const isFive = sel.value === "5";
+  const blackBtn = grp.querySelector('[data-color="black"]');
+  const whiteBtn = grp.querySelector('[data-color="white"]');
+  if (isFive) {
+    grp.querySelectorAll(".color-btn").forEach((b) => (b.style.display = "none"));
+    grp.dataset.forcedGreen = "1";
+  } else {
+    grp.querySelectorAll(".color-btn").forEach((b) => (b.style.display = ""));
+    delete grp.dataset.forcedGreen;
+  }
+}
+
+function readGuessFromModal() {
+  const rows = document.querySelectorAll("#guess-slots .guess-slot");
+  const guess = [];
+  rows.forEach((row) => {
+    const num = Number(row.querySelector(".guess-num").value);
+    const grp = row.querySelector(".guess-color");
+    const color = grp.dataset.forcedGreen ? "green" : grp.querySelector(".selected")?.dataset.color || "black";
+    guess.push({ num, color });
+  });
+  return guess;
+}
+
+document.getElementById("guess-btn").addEventListener("click", openGuessModal);
+document.getElementById("guess-close").addEventListener("click", () => {
+  document.getElementById("guess-modal").classList.remove("open");
+});
+document.getElementById("guess-submit").addEventListener("click", async () => {
+  const guess = readGuessFromModal();
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "guess", room_id: mpRoomId, username: getUsername(), guess }),
+    });
+    document.getElementById("guess-modal").classList.remove("open");
+    if (data.state) {
+      gameState = data.state;
+      renderGame(gameState);
+    }
+  } catch (err) {
+    document.getElementById("guess-error").textContent = err.message;
+  }
+});
+
+function showGameOver(state) {
+  const me = getUsername();
+  const won = state.winners.includes(me);
+  const title = state.winners.length === 0
+    ? "GAME OVER — no one cracked the code"
+    : state.winners.length > 1
+      ? `TIE: ${state.winners.map((w) => w.toUpperCase()).join(" & ")}`
+      : `${state.winners[0].toUpperCase()} WINS!`;
+  document.getElementById("gameover-title").textContent = title;
+
+  let bodyHtml = "";
+  if (state.playerCount === 2 && state.opponent.revealedHand) {
+    bodyHtml = `<div class="panel-title">${state.opponent.username.toUpperCase()}'S TILES WERE</div><div class="hand-row">${state.opponent.revealedHand.map(tileSpan).join("")}</div>`;
+  } else if (state.revealedCentral) {
+    bodyHtml = `<div class="panel-title">THE CENTRAL TILES WERE</div><div class="hand-row">${state.revealedCentral.map(tileSpan).join("")}</div>`;
+  }
+  document.getElementById("gameover-body").innerHTML = bodyHtml;
+  document.getElementById("gameover-modal").classList.add("open");
+}
+
+document.getElementById("gameover-close").addEventListener("click", async () => {
+  document.getElementById("gameover-modal").classList.remove("open");
+  if (mpRoomId) {
+    try {
+      await api(GAME_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: getUsername() }),
+      });
+    } catch (_) {}
+  }
+  mpRoomId = null;
+  gameState = null;
+  inActiveGame = false;
+  showView("home");
+});
 
 function lobbyPresenceLabel(status) {
   const map = {
@@ -649,7 +937,7 @@ async function mpLeaveGame() {
   const me = getUsername();
   try {
     if (inActiveGame) {
-      const data = await api(ROOM_URL, {
+      await api(GAME_URL, {
         method: "PATCH",
         body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: me }),
       });
@@ -697,9 +985,11 @@ function resetLobbyAfterCancel(by) {
 }
 
 function handleLeftOrAbandoned(by) {
+  stopGamePoll();
   mpRoomId = null;
   mpRole = null;
   inActiveGame = false;
+  gameState = null;
   mpPendingInvites = [];
   document.getElementById("mp-modal").classList.remove("open");
   document.getElementById("mp-active-game-banner").style.display = "none";
@@ -808,7 +1098,7 @@ document.getElementById("mp-start-btn").addEventListener("click", async () => {
     }
   }
   try {
-    await api(ROOM_URL, {
+    await api(GAME_URL, {
       method: "PATCH",
       body: JSON.stringify({ action: "start", room_id: mpRoomId, username: getUsername() }),
     });

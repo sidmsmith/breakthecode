@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:lobby": "node --test lib/bc-lobby-flows.test.js"
+    "test": "node --test lib/bc-engine.test.js",
+    "test:lobby": "node --test lib/bc-lobby-flows.test.js",
+    "test:all": "node --test lib/bc-engine.test.js lib/bc-lobby-flows.test.js"
   },
   "dependencies": {
     "pg": "^8.16.3"
