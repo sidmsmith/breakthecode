@@ -42,14 +42,45 @@
         <div class="panel-title">YOUR TILES</div>
         <div class="hand-row" id="hand-row"></div>
         <div class="target-info" id="target-info"></div>
-        <button class="btn btn-primary btn-guess" id="guess-btn" type="button">GUESS</button>
+        <div class="left-actions">
+          <button class="btn btn-primary" id="ask-btn" type="button">ASK <span class="deck-count" id="deck-count"></span></button>
+          <button class="btn btn-primary btn-guess" id="guess-btn" type="button">GUESS</button>
+          <button class="btn" id="history-btn" type="button">HISTORY</button>
+        </div>
       </div>
       <div class="panel panel-right">
-        <div class="panel-title">QUESTIONS <span class="deck-count" id="deck-count"></span></div>
-        <div class="card-board" id="card-board"></div>
-        <div class="panel-title log-title">HISTORY</div>
-        <div class="log-list" id="log-list"></div>
+        <div class="panel-title">
+          NOTEPAD
+          <span class="notepad-hint">Your private notes — only you can see this</span>
+          <button class="notepad-clear" id="notepad-clear" type="button">CLEAR</button>
+        </div>
+        <div class="number-tracker" id="number-tracker"></div>
+        <div class="notepad-grid" id="notepad-grid"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="ask-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title">ASK A QUESTION</span>
+      <button class="modal-x" id="ask-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="card-board" id="card-board"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="history-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title">HISTORY</span>
+      <button class="modal-x" id="history-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="log-list" id="log-list"></div>
     </div>
   </div>
 </div>
@@ -490,6 +521,10 @@ function renderGame(state) {
     const answers = entry.answers.map((a) => `${a.username.toUpperCase()}: ${a.answerText}`).join(" · ");
     return `<div class="log-entry">#${entry.turnNumber} ${entry.askedBy.toUpperCase()} asked: "${entry.cardText}"<div class="log-answers">${answers}</div></div>`;
   }).join("") || `<div class="log-entry log-empty">No questions asked yet.</div>`;
+
+  ensureNotepadLoaded(state);
+  renderNumberTracker();
+  renderNotepadGrid(state);
 }
 
 async function askCard(cardId) {
@@ -498,6 +533,7 @@ async function askCard(cardId) {
       method: "PATCH",
       body: JSON.stringify({ action: "ask", room_id: mpRoomId, username: getUsername(), cardId }),
     });
+    document.getElementById("ask-modal").classList.remove("open");
     if (data.state) {
       gameState = data.state;
       renderGame(gameState);
@@ -506,6 +542,175 @@ async function askCard(cardId) {
     showToast(err.message);
   }
 }
+
+document.getElementById("ask-btn").addEventListener("click", () => {
+  document.getElementById("ask-modal").classList.add("open");
+});
+document.getElementById("ask-close").addEventListener("click", () => {
+  document.getElementById("ask-modal").classList.remove("open");
+});
+document.getElementById("history-btn").addEventListener("click", () => {
+  document.getElementById("history-modal").classList.add("open");
+});
+document.getElementById("history-close").addEventListener("click", () => {
+  document.getElementById("history-modal").classList.remove("open");
+});
+
+// ── Notepad — a private per-player scratchpad, never sent to the server ─────
+// Digital take on the physical Notepad: cross off tiles you've placed, and
+// jot your working guess (number + color) for each opponent/position.
+let notepad = { numbers: {}, cells: {} };
+let notepadActiveKey = null;
+
+function notepadKey(state) {
+  if (!mpRoomId || !state?.dealId) return null;
+  return `bc_notes_${mpRoomId}_${state.dealId}_${getUsername()}`;
+}
+
+function ensureNotepadLoaded(state) {
+  const key = notepadKey(state);
+  if (!key || key === notepadActiveKey) return;
+  notepadActiveKey = key;
+  try {
+    const raw = localStorage.getItem(key);
+    notepad = raw ? JSON.parse(raw) : { numbers: {}, cells: {} };
+  } catch (_) {
+    notepad = { numbers: {}, cells: {} };
+  }
+}
+
+function saveNotepad() {
+  if (!notepadActiveKey) return;
+  try { localStorage.setItem(notepadActiveKey, JSON.stringify(notepad)); } catch (_) {}
+}
+
+function notepadOpponents(state) {
+  return state.playerCount === 2 ? [state.opponent.username] : state.opponents.map((o) => o.username);
+}
+
+function positionLetters(state) {
+  const n = state.playerCount === 4 ? 4 : 5;
+  return ["a", "b", "c", "d", "e"].slice(0, n);
+}
+
+function renderNumberTracker() {
+  const el = document.getElementById("number-tracker");
+  const tiles = [];
+  for (let n = 0; n <= 9; n++) {
+    if (n === 5) { tiles.push({ num: 5, color: "green", dup: "a" }); tiles.push({ num: 5, color: "green", dup: "b" }); }
+    else { tiles.push({ num: n, color: "black" }); tiles.push({ num: n, color: "white" }); }
+  }
+  el.innerHTML = tiles.map((t) => {
+    const key = `${t.num}-${t.color}${t.dup || ""}`;
+    const marked = !!notepad.numbers[key];
+    return `<button type="button" class="num-chip ${COLOR_STYLE[t.color]}${marked ? " marked" : ""}" data-key="${key}">${t.num}</button>`;
+  }).join("");
+  el.querySelectorAll(".num-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.key;
+      notepad.numbers[key] = !notepad.numbers[key];
+      saveNotepad();
+      btn.classList.toggle("marked", notepad.numbers[key]);
+    });
+  });
+}
+
+function ensureCellsShape(state) {
+  const n = positionLetters(state).length;
+  for (const u of notepadOpponents(state)) {
+    if (!Array.isArray(notepad.cells[u]) || notepad.cells[u].length !== n) {
+      notepad.cells[u] = Array.from({ length: n }, () => null);
+    }
+  }
+}
+
+function noteCellHtml(username, i, cell) {
+  const isFive = cell?.num === 5;
+  return `
+    <div class="note-cell" data-user="${username}" data-i="${i}">
+      <select class="note-num">
+        <option value="">–</option>
+        ${Array.from({ length: 10 }, (_, n) => `<option value="${n}" ${cell?.num === n ? "selected" : ""}>${n}</option>`).join("")}
+      </select>
+      <div class="note-colors">
+        <button type="button" class="note-dot black${cell?.color === "black" ? " selected" : ""}" data-color="black" ${isFive ? 'style="display:none"' : ""}></button>
+        <button type="button" class="note-dot green${cell?.color === "green" ? " selected" : ""}" data-color="green" ${isFive ? "" : 'style="display:none"'}></button>
+        <button type="button" class="note-dot white${cell?.color === "white" ? " selected" : ""}" data-color="white" ${isFive ? 'style="display:none"' : ""}></button>
+      </div>
+    </div>`;
+}
+
+function renderNotepadGrid(state) {
+  ensureCellsShape(state);
+  const opponents = notepadOpponents(state);
+  const letters = positionLetters(state);
+  const grid = document.getElementById("notepad-grid");
+  grid.style.setProperty("--note-cols", letters.length);
+
+  let html = `<div class="note-row note-header"><div class="note-row-label"></div>`;
+  html += letters.map((l) => `<div class="note-col-label">${l}</div>`).join("");
+  html += `</div>`;
+  opponents.forEach((u) => {
+    const meta = state.playerCount === 2 ? null : state.opponents.find((o) => o.username === u);
+    const badge = meta?.decided === "won" ? " ✓" : meta?.decided === "lost" ? " ✕" : "";
+    html += `<div class="note-row"><div class="note-row-label">${u.toUpperCase()}${badge}</div>`;
+    letters.forEach((l, i) => { html += noteCellHtml(u, i, notepad.cells[u][i]); });
+    html += `</div>`;
+  });
+  grid.innerHTML = html;
+
+  grid.querySelectorAll(".note-cell").forEach((cellEl) => {
+    const user = cellEl.dataset.user;
+    const i = Number(cellEl.dataset.i);
+    const sel = cellEl.querySelector(".note-num");
+    const dots = [...cellEl.querySelectorAll(".note-dot")];
+
+    function syncDotVisibility() {
+      const isFive = sel.value === "5";
+      dots.forEach((d) => {
+        d.style.display = (d.dataset.color === "green") === isFive ? "" : "none";
+      });
+    }
+
+    sel.addEventListener("change", () => {
+      if (sel.value === "") {
+        notepad.cells[user][i] = null;
+      } else {
+        const num = Number(sel.value);
+        if (num === 5) {
+          notepad.cells[user][i] = { num: 5, color: "green" };
+        } else {
+          const current = notepad.cells[user][i];
+          const color = current && current.color !== "green" ? current.color : "black";
+          notepad.cells[user][i] = { num, color };
+        }
+      }
+      saveNotepad();
+      syncDotVisibility();
+      dots.forEach((d) => d.classList.toggle("selected", notepad.cells[user][i]?.color === d.dataset.color));
+    });
+
+    dots.forEach((d) => {
+      d.addEventListener("click", () => {
+        if (sel.value === "" || sel.value === "5") return;
+        notepad.cells[user][i] = { num: Number(sel.value), color: d.dataset.color };
+        saveNotepad();
+        dots.forEach((x) => x.classList.remove("selected"));
+        d.classList.add("selected");
+      });
+    });
+  });
+}
+
+document.getElementById("notepad-clear").addEventListener("click", () => {
+  if (!confirm("Clear all your notes for this game?")) return;
+  notepad = { numbers: {}, cells: {} };
+  saveNotepad();
+  if (gameState) {
+    renderNumberTracker();
+    renderNotepadGrid(gameState);
+  }
+});
 
 // ── Guess modal ──────────────────────────────────────────────────────────────
 function guessSlotCount() {
@@ -536,8 +741,23 @@ function openGuessModal() {
       </div>`;
     slots.appendChild(row);
   }
+
+  // Pre-fill from your notepad row for this opponent, if you've been keeping notes.
+  if (gameState.playerCount === 2) {
+    const notes = notepad.cells[gameState.opponent.username] || [];
+    slots.querySelectorAll(".guess-slot").forEach((row, i) => {
+      const cell = notes[i];
+      if (!cell) return;
+      row.querySelector(".guess-num").value = String(cell.num);
+      if (cell.num !== 5) {
+        row.querySelectorAll(".color-btn").forEach((b) => b.classList.toggle("selected", b.dataset.color === cell.color));
+      }
+    });
+  }
+
   slots.querySelectorAll(".guess-num").forEach((sel) => {
     sel.addEventListener("change", () => syncColorOptions(sel));
+    syncColorOptions(sel);
   });
   slots.querySelectorAll(".guess-color").forEach((grp) => {
     grp.querySelectorAll(".color-btn").forEach((btn) => {

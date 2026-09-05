@@ -150,7 +150,7 @@ header {
   flex-direction: column;
   gap: 8px;
 }
-.panel-left { flex: 0 0 40%; }
+.panel-left { flex: 0 0 200px; }
 .panel-right { flex: 1; min-width: 0; }
 .panel-title {
   font-size: 0.7rem;
@@ -160,8 +160,30 @@ header {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
-.deck-count { font-weight: 500; color: var(--muted); font-size: 0.65rem; }
+.deck-count { font-weight: 500; opacity: 0.85; font-size: 0.65rem; }
+.notepad-hint { font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: normal; }
+.notepad-clear {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+.notepad-clear:hover { color: var(--bad); border-color: var(--bad); }
+
+.left-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.left-actions .btn { width: 100%; padding: 10px; }
 
 .hand-row {
   display: flex;
@@ -229,6 +251,95 @@ header {
   line-height: 1.35;
 }
 .log-entry.log-empty { color: var(--muted); text-align: center; }
+
+/* Number tracker — cross off physical tiles as you place them. */
+.number-tracker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.num-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.num-chip.marked { opacity: 1; box-shadow: 0 0 0 2px var(--accent) inset; }
+.num-chip.tile-black { background: #111; color: #fff; }
+.num-chip.tile-white { background: #f2f2f0; color: #111; }
+.num-chip.tile-green { background: var(--accent); color: #0d1a08; }
+
+/* Notepad grid — private deduction notes per opponent/position. */
+.notepad-grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.note-row {
+  display: grid;
+  grid-template-columns: 74px repeat(var(--note-cols, 5), 1fr);
+  gap: 4px;
+  align-items: center;
+}
+.note-row-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-col-label {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.note-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.note-num {
+  width: 100%;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 2px;
+}
+.note-colors { display: flex; gap: 4px; }
+.note-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+.note-dot.black { background: #111; }
+.note-dot.white { background: #f2f2f0; }
+.note-dot.green { background: var(--accent); }
+.note-dot.selected { box-shadow: 0 0 0 2px var(--accent); }
 .log-answers { color: var(--muted); margin-top: 2px; }
 .log-entry.log-correct { border-color: var(--ok); }
 .log-entry.log-wrong { border-color: var(--bad); }
