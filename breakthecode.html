@@ -73,7 +73,9 @@
     <div class="modal-body">
       <div id="gameover-title"></div>
       <div id="gameover-body"></div>
-      <button class="btn btn-primary" id="gameover-close" type="button" style="width:100%">BACK TO HOME</button>
+      <p class="mp-hint" id="gameover-wait-hint" style="display:none;text-align:center">Waiting for the host to restart…</p>
+      <button class="btn btn-primary" id="gameover-restart" type="button" style="width:100%;display:none">PLAY AGAIN</button>
+      <button class="btn" id="gameover-close" type="button" style="width:100%;margin-top:8px">BACK TO HOME</button>
     </div>
   </div>
 </div>
@@ -376,6 +378,7 @@ async function enterGame() {
     mpLobbyRefreshTimer = null;
   }
   document.getElementById("mp-modal").classList.remove("open");
+  document.getElementById("gameover-modal").classList.remove("open");
   startGamePoll();
   await refreshGameState();
 }
@@ -397,10 +400,12 @@ function stopGamePoll() {
 }
 
 let gameState = null;
+let gameRoomHost = null;
 async function refreshGameState() {
   if (!mpRoomId) return;
   try {
     const data = await api(`${GAME_URL}?room_id=${mpRoomId}&username=${encodeURIComponent(getUsername())}`);
+    if (data.room) gameRoomHost = data.room.hostUsername || null;
     if (data.state) {
       gameState = data.state;
       renderGame(gameState);
@@ -611,8 +616,26 @@ function showGameOver(state) {
     bodyHtml = `<div class="panel-title">THE CENTRAL TILES WERE</div><div class="hand-row">${state.revealedCentral.map(tileSpan).join("")}</div>`;
   }
   document.getElementById("gameover-body").innerHTML = bodyHtml;
+
+  const isHost = gameRoomHost === me;
+  document.getElementById("gameover-restart").style.display = isHost ? "" : "none";
+  document.getElementById("gameover-wait-hint").style.display = isHost ? "none" : "block";
+
   document.getElementById("gameover-modal").classList.add("open");
 }
+
+document.getElementById("gameover-restart").addEventListener("click", async () => {
+  try {
+    await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "restart", room_id: mpRoomId, username: getUsername() }),
+    });
+    // The room's own "game-start" event (received by every player, including
+    // the host) is what actually re-enters the game — see mpSubscribeRoom.
+  } catch (err) {
+    showToast(err.message);
+  }
+});
 
 document.getElementById("gameover-close").addEventListener("click", async () => {
   document.getElementById("gameover-modal").classList.remove("open");
@@ -626,6 +649,7 @@ document.getElementById("gameover-close").addEventListener("click", async () => 
   }
   mpRoomId = null;
   gameState = null;
+  gameRoomHost = null;
   inActiveGame = false;
   showView("home");
 });
@@ -990,6 +1014,7 @@ function handleLeftOrAbandoned(by) {
   mpRole = null;
   inActiveGame = false;
   gameState = null;
+  gameRoomHost = null;
   mpPendingInvites = [];
   document.getElementById("mp-modal").classList.remove("open");
   document.getElementById("mp-active-game-banner").style.display = "none";

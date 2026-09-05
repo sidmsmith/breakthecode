@@ -95,14 +95,52 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, cancelled_invites: cancelledInvites });
       }
 
+      if (action === "restart") {
+        const { room, players } = await loadRoom(client, room_id);
+        if (!room) return res.status(404).json({ error: "room not found" });
+        if (room.status !== "finished") {
+          return res.status(400).json({ error: "This game hasn't finished yet." });
+        }
+        if (String(room.host_username).toLowerCase() !== user) {
+          return res.status(403).json({ error: "Only the host can restart the game" });
+        }
+        const roster = players.filter((p) => p.role === "host" || p.status === "accepted");
+        if (roster.length < MIN_PLAYERS) {
+          return res.status(400).json({ error: `Need at least ${MIN_PLAYERS} players to restart.` });
+        }
+
+        // Rotate who starts so the same person isn't first every time.
+        let orderedPlayers = roster.map((p) => p.username);
+        const prevStarting = room.game_state?.startingPlayer;
+        const prevIdx = prevStarting ? orderedPlayers.indexOf(prevStarting) : -1;
+        if (prevIdx !== -1) {
+          const nextIdx = (prevIdx + 1) % orderedPlayers.length;
+          orderedPlayers = [...orderedPlayers.slice(nextIdx), ...orderedPlayers.slice(0, nextIdx)];
+        }
+
+        const state = buildInitialState({ players: orderedPlayers, hostUsername: user });
+        await client.query(
+          `UPDATE bc_rooms SET status='active', started_at=NOW(), ended_at=NULL, game_state=$2 WHERE id=$1`,
+          [room_id, JSON.stringify(state)]
+        );
+        await ablyPublish(roomChannel(room_id), "game-start", {});
+        return res.status(200).json({ ok: true });
+      }
+
       const { room } = await loadRoom(client, room_id);
       if (!room) return res.status(404).json({ error: "room not found" });
-      if (room.status !== "active") {
+      if (room.status !== "active" && room.status !== "finished") {
         return res.status(400).json({ error: "This game is not active." });
       }
       const state = room.game_state;
       if (!state || !state.players.includes(user)) {
         return res.status(403).json({ error: "You are not part of this game." });
+      }
+
+      // Ask/guess require the game still be in progress; "leave" (below) is
+      // allowed after game_over too, so a finished game can be walked away from.
+      if ((action === "ask" || action === "guess") && room.status !== "active") {
+        return res.status(400).json({ error: "This game is not active." });
       }
 
       if (action === "ask") {
@@ -136,12 +174,22 @@ export default async function handler(req, res) {
       }
 
       if (action === "leave") {
-        const remaining = state.players.filter((p) => p !== user && !state.left[p]);
-        markPlayerLeft(state, user);
         await client.query(
           `UPDATE bc_room_players SET status='left' WHERE room_id=$1 AND username=$2`,
           [room_id, user]
         );
+
+        // Game already concluded — just step away, no abandonment/turn logic to run.
+        if (room.status === "finished") {
+          await client.query(`UPDATE bc_rooms SET game_state=$2 WHERE id=$1`, [
+            room_id,
+            JSON.stringify(state),
+          ]);
+          return res.status(200).json({ ok: true });
+        }
+
+        const remaining = state.players.filter((p) => p !== user && !state.left[p]);
+        markPlayerLeft(state, user);
 
         if (remaining.length < MIN_PLAYERS) {
           await client.query(
