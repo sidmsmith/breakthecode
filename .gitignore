@@ -8,3 +8,5 @@ node_modules/
 # Reference materials (not needed at runtime) — kept locally, not in git history.
 instructions.pdf
 sample.jpg
+.claude/settings.local.json
+.claude/worktrees/
