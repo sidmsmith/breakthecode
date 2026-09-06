@@ -520,6 +520,27 @@ header {
 .modal-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 
 .mp-sec { font-size: 0.7rem; font-weight: 700; color: var(--muted); margin-top: 4px; }
+
+.mp-ask-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  margin-top: 4px;
+}
+.mp-radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.mp-radio input { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+.mp-radio strong { color: var(--text); }
 .mp-hint { font-size: 0.8rem; color: var(--muted); }
 .mp-row {
   display: flex;

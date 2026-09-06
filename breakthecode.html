@@ -69,6 +69,7 @@
       <button class="modal-x" id="ask-close" type="button">✕</button>
     </div>
     <div class="modal-body">
+      <p class="mp-hint" id="ask-mode-hint" style="display:none"></p>
       <div class="card-board" id="card-board"></div>
     </div>
   </div>
@@ -172,6 +173,17 @@
       <div class="modal-body">
         <div id="mp-wait-list"></div>
         <p class="mp-hint">Need 2–4 accepted players to start. Select Available players to invite more before starting.</p>
+        <div id="mp-ask-mode" class="mp-ask-mode" style="display:none">
+          <div class="mp-sec">4-PLAYER QUESTION RULE</div>
+          <label class="mp-radio">
+            <input type="radio" name="bc-askmode" value="others" checked>
+            <span><strong>Questioner sits out</strong> — the asker doesn't answer their own question.</span>
+          </label>
+          <label class="mp-radio">
+            <input type="radio" name="bc-askmode" value="all">
+            <span><strong>Everyone answers</strong> — all four players answer, asker included.</span>
+          </label>
+        </div>
         <div class="mp-wait-actions" id="mp-wait-actions">
           <button class="btn btn-primary" id="mp-wait-invite-btn" type="button" style="display:none" disabled>INVITE SELECTED</button>
           <button class="btn btn-primary" id="mp-start-btn" type="button" disabled>START GAME</button>
@@ -514,6 +526,16 @@ function renderGame(state) {
   }
 
   document.getElementById("deck-count").textContent = `(${state.deckRemaining} left in draw pile)`;
+
+  const askModeHint = document.getElementById("ask-mode-hint");
+  const askModeText = state.playerCount === 4
+    ? (state.askerAnswers
+        ? "4-player rule: all four players answer — you included."
+        : "4-player rule: you don't answer your own question.")
+    : "";
+  askModeHint.textContent = askModeText;
+  askModeHint.style.display = askModeText ? "" : "none";
+
   const board = document.getElementById("card-board");
   const canAct = state.phase === "playing" && myTurn;
   board.innerHTML = state.board.map((c) =>
@@ -1130,6 +1152,8 @@ async function renderWaitingList() {
     (p) => p.status === "accepted" || p.role === "host"
   ).length;
   document.getElementById("mp-start-btn").disabled = accepted < 2;
+  // The 4-player question rule only matters with a full table.
+  document.getElementById("mp-ask-mode").style.display = accepted === 4 ? "" : "none";
   updateWaitInviteActions();
 }
 
@@ -1482,10 +1506,12 @@ document.getElementById("mp-start-btn").addEventListener("click", async () => {
       return;
     }
   }
+  const askModeChoice = document.querySelector('input[name="bc-askmode"]:checked');
+  const askerAnswers = askModeChoice?.value === "all";
   try {
     await api(GAME_URL, {
       method: "PATCH",
-      body: JSON.stringify({ action: "start", room_id: mpRoomId, username: getUsername() }),
+      body: JSON.stringify({ action: "start", room_id: mpRoomId, username: getUsername(), askerAnswers }),
     });
     document.getElementById("mp-modal").classList.remove("open");
     await enterGame();

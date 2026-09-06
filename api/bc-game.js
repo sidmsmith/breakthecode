@@ -82,7 +82,9 @@ export default async function handler(req, res) {
         );
 
         const orderedPlayers = roster.map((p) => p.username);
-        const state = buildInitialState({ players: orderedPlayers, hostUsername: user });
+        // 4-player only; ignored by the engine for 2-3p. Default: asker sits out.
+        const askerAnswers = (req.body || {}).askerAnswers === true;
+        const state = buildInitialState({ players: orderedPlayers, hostUsername: user, askerAnswers });
 
         await client.query(
           `UPDATE bc_rooms SET status='active', started_at=NOW(), game_state=$2 WHERE id=$1`,
@@ -118,7 +120,11 @@ export default async function handler(req, res) {
           orderedPlayers = [...orderedPlayers.slice(nextIdx), ...orderedPlayers.slice(0, nextIdx)];
         }
 
-        const state = buildInitialState({ players: orderedPlayers, hostUsername: user });
+        const state = buildInitialState({
+          players: orderedPlayers,
+          hostUsername: user,
+          askerAnswers: room.game_state?.askerAnswers === true, // keep the rule from last game
+        });
         await client.query(
           `UPDATE bc_rooms SET status='active', started_at=NOW(), ended_at=NULL, game_state=$2 WHERE id=$1`,
           [room_id, JSON.stringify(state)]
