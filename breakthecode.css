@@ -29,6 +29,7 @@ body {
 }
 
 #app {
+  position: relative;
   height: 100dvh;
   max-width: 480px;
   margin: 0 auto;
@@ -47,26 +48,34 @@ header {
   flex-shrink: 0;
 }
 
-/* Collapsible header — hidden during a game, reopened via the caret tab. */
+/* Collapsible header — hidden during a game, reopened via the caret tab.
+   Collapsed, the caret floats centred at the very top, inline with the
+   turn status and player chips. Open, it drops into flow under the header. */
 #hdr-toggle {
   display: none;
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
   flex-shrink: 0;
-  align-self: center;
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1;
-  padding: 3px 30px 4px;
-  margin-bottom: 4px;
+  padding: 2px 22px 3px;
   cursor: pointer;
-  transition: transform 0.15s;
 }
 #app:has(#view-game.active) header { display: none; }
 #app:has(#view-game.active) #hdr-toggle { display: block; }
 #app.hdr-open:has(#view-game.active) header { display: flex; }
-#app.hdr-open #hdr-toggle { transform: rotate(180deg); }
+#app.hdr-open:has(#view-game.active) #hdr-toggle {
+  position: static;
+  transform: rotate(180deg);
+  margin: 0 auto 4px;
+}
 
 .logo {
   display: flex;
