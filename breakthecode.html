@@ -553,10 +553,17 @@ function renderGame(state) {
   // questions) but dims to match a disabled GUESS.
   document.getElementById("ask-btn").classList.toggle("btn-inactive", !canAct);
   board.innerHTML = state.board.map((c) =>
-    `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>${c.text}</button>`
+    `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>
+       <span class="card-btn-text">${c.text}</span>
+       ${c.hint ? `<span class="card-btn-hint">${c.hint}</span>` : ""}
+     </button>`
   ).join("");
   board.querySelectorAll(".card-btn").forEach((btn) => {
-    btn.addEventListener("click", () => askCard(btn.dataset.card));
+    btn.addEventListener("click", () => {
+      const card = state.board.find((c) => c.cardId === btn.dataset.card);
+      if (card && card.choices) showCardChoice(card);
+      else askCard(btn.dataset.card);
+    });
   });
 
   const guessBtn = document.getElementById("guess-btn");
@@ -580,12 +587,27 @@ function renderGame(state) {
   renderNotepadGrid(state);
 }
 
-async function askCard(cardId) {
+// "Where is your 1 or 2?" style card — swap the board for a number chooser.
+function showCardChoice(card) {
+  const board = document.getElementById("card-board");
+  board.innerHTML = `
+    <div class="card-choice-prompt">
+      <div class="card-choice-q">${card.text}</div>
+      <div class="card-choice-btns">
+        ${card.choices.map((n) => `<button type="button" class="btn btn-primary card-choice" data-n="${n}">${n}</button>`).join("")}
+      </div>
+      <button type="button" class="btn card-choice-back">← back to questions</button>
+    </div>`;
+  board.querySelectorAll(".card-choice").forEach((b) =>
+    b.addEventListener("click", () => askCard(card.cardId, Number(b.dataset.n))));
+  board.querySelector(".card-choice-back").addEventListener("click", () => renderGame(gameState));
+}
+
+async function askCard(cardId, choice) {
   try {
-    const data = await api(GAME_URL, {
-      method: "PATCH",
-      body: JSON.stringify({ action: "ask", room_id: mpRoomId, username: getUsername(), cardId }),
-    });
+    const body = { action: "ask", room_id: mpRoomId, username: getUsername(), cardId };
+    if (choice != null) body.choice = choice;
+    const data = await api(GAME_URL, { method: "PATCH", body: JSON.stringify(body) });
     document.getElementById("ask-modal").classList.remove("open");
     if (data.state) {
       gameState = data.state;
@@ -736,18 +758,23 @@ const HINT_LABELS = {
   "even-count": "Even",
   "black-count": "Blacks",
   "white-count": "Whites",
-  "green-count": "Greens",
-  "low-count": "0–4",
-  "high-count": "5–9",
-  "lowest-position": "Lowest",
-  "highest-position": "Highest",
+  "pairs-count": "Pairs",
   "same-color-neighbors": "Same-color",
   "consecutive-neighbors": "Consecutive",
+  "sum-left": "Sum L3",
+  "sum-middle": "Sum M3",
+  "sum-right": "Sum R3",
+  "sum-black": "Sum blk",
+  "sum-white": "Sum wht",
+  "sum-all": "Sum all",
+  "high-low-diff": "Hi-Lo",
+  "middle-over-5": "Mid>5",
 };
-function hintLabel(cardId) {
-  if (HINT_LABELS[cardId]) return HINT_LABELS[cardId];
-  const m = /^where-(\d)$/.exec(cardId);
-  return m ? `${m[1]}s` : cardId;
+function hintLabel(entry) {
+  if (entry.choice != null) return `${entry.choice}s`;
+  if (HINT_LABELS[entry.cardId]) return HINT_LABELS[entry.cardId];
+  const m = /^where-(\d+)$/.exec(entry.cardId);
+  return m ? `${m[1]}s` : entry.cardId;
 }
 function hintValue(answerText) {
   const t = (answerText || "").trim();
@@ -755,7 +782,7 @@ function hintValue(answerText) {
   return t.toLowerCase().replace(/,\s*/g, ",").replace(/;\s*/g, ", ");
 }
 function opponentHints(state, username) {
-  const positional = new Set(["lowest-position", "highest-position", "same-color-neighbors", "consecutive-neighbors"]);
+  const positional = new Set(["same-color-neighbors", "consecutive-neighbors"]);
   const out = [];
   for (const entry of state.log) {
     if (entry.type !== "question") continue;
@@ -763,8 +790,9 @@ function opponentHints(state, username) {
     if (!ans) continue;
     const value = hintValue(ans.answerText);
     const elim = value === "none" || value === "0";
-    const pin = !elim && (positional.has(entry.cardId) || /^where-\d$/.test(entry.cardId));
-    out.push({ label: hintLabel(entry.cardId), value, elim, pin, turn: entry.turnNumber });
+    const isWhere = /^where-/.test(entry.cardId) || entry.choice != null;
+    const pin = !elim && (positional.has(entry.cardId) || isWhere);
+    out.push({ label: hintLabel(entry), value, elim, pin, turn: entry.turnNumber });
   }
   return out.reverse();
 }

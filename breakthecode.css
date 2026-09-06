@@ -284,6 +284,28 @@ header {
 }
 .card-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .card-btn:not(:disabled):hover { border-color: var(--accent); }
+.card-btn-text { display: block; }
+.card-btn-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Number chooser shown in place of the board for a "1 or 2?" style card. */
+.card-choice-prompt {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+}
+.card-choice-q { font-size: 0.85rem; font-weight: 700; text-align: center; }
+.card-choice-btns { display: flex; gap: 10px; }
+.card-choice-btns .card-choice { min-width: 64px; font-size: 1.2rem; padding: 10px 14px; }
+.card-choice-back { font-size: 0.72rem; }
 
 .log-title { margin-top: 4px; }
 .log-list {

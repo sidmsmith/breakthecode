@@ -150,9 +150,9 @@ export default async function handler(req, res) {
       }
 
       if (action === "ask") {
-        const { cardId } = req.body || {};
+        const { cardId, choice } = req.body || {};
         try {
-          askQuestion(state, { username: user, cardId });
+          askQuestion(state, { username: user, cardId, choice });
         } catch (err) {
           return res.status(400).json({ error: err.message });
         }
