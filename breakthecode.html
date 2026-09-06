@@ -675,6 +675,48 @@ function noteCellHtml(username, i, cell) {
     </button>`;
 }
 
+// ── Per-opponent answer digest ───────────────────────────────────────────────
+// Every question in state.log carries one answer per player. For each opponent
+// we distil their answers into short "Label: value" hints, newest first, shown
+// under their name on the notepad. The full record still lives in HISTORY.
+const HINT_LABELS = {
+  "odd-count": "Odd",
+  "even-count": "Even",
+  "black-count": "Blacks",
+  "white-count": "Whites",
+  "green-count": "Greens",
+  "low-count": "0–4",
+  "high-count": "5–9",
+  "lowest-position": "Lowest",
+  "highest-position": "Highest",
+  "same-color-neighbors": "Same-color",
+  "consecutive-neighbors": "Consecutive",
+};
+function hintLabel(cardId) {
+  if (HINT_LABELS[cardId]) return HINT_LABELS[cardId];
+  const m = /^where-(\d)$/.exec(cardId);
+  return m ? `${m[1]}s` : cardId;
+}
+function hintValue(answerText) {
+  const t = (answerText || "").trim();
+  if (/^none$/i.test(t)) return "none";
+  return t.toLowerCase().replace(/,\s*/g, ",").replace(/;\s*/g, ", ");
+}
+function opponentHints(state, username) {
+  const positional = new Set(["lowest-position", "highest-position", "same-color-neighbors", "consecutive-neighbors"]);
+  const out = [];
+  for (const entry of state.log) {
+    if (entry.type !== "question") continue;
+    const ans = entry.answers?.find((a) => a.username === username);
+    if (!ans) continue;
+    const value = hintValue(ans.answerText);
+    const elim = value === "none" || value === "0";
+    const pin = !elim && (positional.has(entry.cardId) || /^where-\d$/.test(entry.cardId));
+    out.push({ label: hintLabel(entry.cardId), value, elim, pin, turn: entry.turnNumber });
+  }
+  return out.reverse();
+}
+
 function renderNotepadGrid(state) {
   ensureCellsShape(state);
   const opponents = notepadOpponents(state);
@@ -688,8 +730,16 @@ function renderNotepadGrid(state) {
   opponents.forEach((u) => {
     const meta = state.playerCount === 2 ? null : state.opponents.find((o) => o.username === u);
     const badge = meta?.decided === "won" ? " ✓" : meta?.decided === "lost" ? " ✕" : "";
+    html += `<div class="note-block">`;
     html += `<div class="note-row"><div class="note-row-label">${u.toUpperCase()}${badge}</div>`;
     letters.forEach((l, i) => { html += noteCellHtml(u, i, notepad.cells[u][i]); });
+    html += `</div>`;
+    const hints = opponentHints(state, u);
+    if (hints.length) {
+      html += `<div class="note-hints">` + hints.map((h) =>
+        `<span class="note-hint${h.elim ? " elim" : ""}${h.pin ? " pin" : ""}" title="Turn ${h.turn}">${h.label}: ${h.value}</span>`
+      ).join("") + `</div>`;
+    }
     html += `</div>`;
   });
   grid.innerHTML = html;

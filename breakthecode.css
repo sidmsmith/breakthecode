@@ -311,7 +311,6 @@ header {
   box-shadow: inset 0 0 0 1px rgba(150, 150, 150, 0.3);
 }
 .num-chip-val { line-height: 1; }
-.num-chip.disabled .num-chip-val { opacity: 0.3; }
 .num-chip.disabled::after {
   content: "\2715";
   position: absolute;
@@ -320,10 +319,10 @@ header {
   align-items: center;
   justify-content: center;
   color: var(--bad);
-  font-size: 1.3em;
+  font-size: 1.45em;
   font-weight: 900;
   pointer-events: none;
-  text-shadow: 0 0 2px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
 }
 .num-chip.tile-black { background: #111; color: #fff; }
 .num-chip.tile-white { background: #f2f2f0; color: #111; }
@@ -336,16 +335,43 @@ header {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .note-row {
   display: grid;
-  grid-template-columns: 74px repeat(var(--note-cols, 5), 1fr);
+  grid-template-columns: 92px repeat(var(--note-cols, 5), minmax(0, 42px));
   gap: 4px;
   align-items: center;
 }
+.note-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+/* Newest-first digest of what questions have revealed about this opponent. */
+.note-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 4px;
+  padding-left: 2px;
+}
+.note-hint {
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.note-hint.pin { color: var(--text); border-color: var(--accent-dark); }
+.note-hint.elim { opacity: 0.5; }
 .note-row-label {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 800;
   color: var(--muted);
   overflow: hidden;
