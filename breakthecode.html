@@ -503,11 +503,13 @@ function renderGame(state) {
   }
   document.getElementById("turn-status").textContent = statusText;
 
-  // Every player, in turn order — you included. "*" marks who started (they
-  // get the last word in 2p, and go first each round), so it matters even when
-  // that's you.
+  // Every player, in turn order starting from whoever went first — you
+  // included. So the "*" (starter; they get the last word in 2p and lead each
+  // round) is always on the leftmost chip, and the chips read as the rotation.
   const starter = state.startingPlayer || state.turnOrder[0];
-  document.getElementById("opp-chips").innerHTML = state.turnOrder.map((u) => {
+  const startIdx = Math.max(0, state.turnOrder.indexOf(starter));
+  const chipOrder = [...state.turnOrder.slice(startIdx), ...state.turnOrder.slice(0, startIdx)];
+  document.getElementById("opp-chips").innerHTML = chipOrder.map((u) => {
     const decided = state.decided ? state.decided[u] : null;
     const hasLeft = state.left ? state.left[u] : false;
     const cls = ["player-chip"];
