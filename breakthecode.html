@@ -23,6 +23,7 @@
       <button class="btn" id="user-btn" type="button">👤</button>
     </div>
   </header>
+  <button id="hdr-toggle" type="button" aria-label="Show menu" title="Menu">&#9662;</button>
 
   <div id="view-home" class="active">
     <div class="home-title">BREAK THE<br><span class="lock">C&#128274;DE</span></div>
@@ -237,6 +238,8 @@ function showView(name) {
   document.getElementById("view-home").classList.toggle("active", name === "home");
   document.getElementById("view-game").classList.toggle("active", name === "game");
   document.getElementById("leave-game-btn").style.display = name === "game" ? "" : "none";
+  // Always start a view with the header collapsed (only matters in-game).
+  document.getElementById("app").classList.remove("hdr-open");
 }
 
 function updateHomeUser() {
@@ -1483,6 +1486,12 @@ document.getElementById("return-game-btn").addEventListener("click", async () =>
   else enterGame();
 });
 document.getElementById("leave-game-btn").addEventListener("click", mpLeaveGame);
+
+// Collapsible header — during a game the header is hidden to free up screen
+// space; a centred caret at the top toggles it back in.
+document.getElementById("hdr-toggle").addEventListener("click", () => {
+  document.getElementById("app").classList.toggle("hdr-open");
+});
 
 window.addEventListener("resize", () => {});
 
