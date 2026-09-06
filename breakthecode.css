@@ -252,7 +252,7 @@ header {
 }
 .log-entry.log-empty { color: var(--muted); text-align: center; }
 
-/* Number tracker — cross off physical tiles as you place them. */
+/* Number tracker — every tile starts enabled; tap to rule one out (red ✕). */
 .number-tracker {
   display: flex;
   flex-wrap: wrap;
@@ -262,6 +262,7 @@ header {
   border-bottom: 1px solid var(--border);
 }
 .num-chip {
+  position: relative;
   width: 26px;
   height: 26px;
   border-radius: 6px;
@@ -269,9 +270,25 @@ header {
   font-weight: 800;
   font-size: 0.75rem;
   cursor: pointer;
-  opacity: 0.55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.num-chip.marked { opacity: 1; box-shadow: 0 0 0 2px var(--accent) inset; }
+.num-chip-val { line-height: 1; }
+.num-chip.disabled .num-chip-val { opacity: 0.3; }
+.num-chip.disabled::after {
+  content: "\2715";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bad);
+  font-size: 1.05rem;
+  font-weight: 900;
+  pointer-events: none;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.55);
+}
 .num-chip.tile-black { background: #111; color: #fff; }
 .num-chip.tile-white { background: #f2f2f0; color: #111; }
 .num-chip.tile-green { background: var(--accent); color: #0d1a08; }

@@ -537,7 +537,7 @@ function renderGame(state) {
   }).join("") || `<div class="log-entry log-empty">No questions asked yet.</div>`;
 
   ensureNotepadLoaded(state);
-  renderNumberTracker();
+  renderNumberTracker(state);
   renderNotepadGrid(state);
 }
 
@@ -607,7 +607,31 @@ function positionLetters(state) {
   return ["a", "b", "c", "d", "e"].slice(0, n);
 }
 
-function renderNumberTracker() {
+// Every tile is "enabled" (still in play) by default. Tapping a chip disables
+// it — struck through with a red ✕ — for numbers you've ruled out.
+// notepad.numbers[key] === true  ⇒  disabled.
+function ownHandTileKeys(state) {
+  const keys = [];
+  let fifths = 0;
+  for (const t of state?.myHand || []) {
+    if (t.num === 5) keys.push(`5-green${fifths++ === 0 ? "a" : "b"}`);
+    else keys.push(`${t.num}-${t.color}`);
+  }
+  return keys;
+}
+
+// Your own tiles can't be part of the answer, so disable them once, up front.
+function autoDisableOwnHand(state) {
+  if (!state || notepad.autoDisabledHand) return;
+  const keys = ownHandTileKeys(state);
+  if (!keys.length) return;
+  for (const key of keys) notepad.numbers[key] = true;
+  notepad.autoDisabledHand = true;
+  saveNotepad();
+}
+
+function renderNumberTracker(state) {
+  autoDisableOwnHand(state);
   const el = document.getElementById("number-tracker");
   const tiles = [];
   for (let n = 0; n <= 9; n++) {
@@ -616,15 +640,15 @@ function renderNumberTracker() {
   }
   el.innerHTML = tiles.map((t) => {
     const key = `${t.num}-${t.color}${t.dup || ""}`;
-    const marked = !!notepad.numbers[key];
-    return `<button type="button" class="num-chip ${COLOR_STYLE[t.color]}${marked ? " marked" : ""}" data-key="${key}">${t.num}</button>`;
+    const disabled = !!notepad.numbers[key];
+    return `<button type="button" class="num-chip ${COLOR_STYLE[t.color]}${disabled ? " disabled" : ""}" data-key="${key}"><span class="num-chip-val">${t.num}</span></button>`;
   }).join("");
   el.querySelectorAll(".num-chip").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.key;
       notepad.numbers[key] = !notepad.numbers[key];
       saveNotepad();
-      btn.classList.toggle("marked", notepad.numbers[key]);
+      btn.classList.toggle("disabled", notepad.numbers[key]);
     });
   });
 }
@@ -640,9 +664,10 @@ function ensureCellsShape(state) {
 
 function noteCellHtml(username, i, cell) {
   const hasNum = cell && cell.num != null;
+  const hasContent = cell && (cell.num != null || cell.color);
   const colorClass = cell?.color ? ` note-cell-${cell.color}` : "";
   return `
-    <button type="button" class="note-cell${hasNum ? " filled" : ""}${colorClass}" data-user="${username}" data-i="${i}">
+    <button type="button" class="note-cell${hasContent ? " filled" : ""}${colorClass}" data-user="${username}" data-i="${i}">
       <span class="note-cell-num">${hasNum ? cell.num : "–"}</span>
     </button>`;
 }
@@ -704,14 +729,14 @@ function renderNumpad() {
     btn.addEventListener("click", () => setNumpadNum(Number(btn.dataset.num)));
   });
 
+  // A number and a colour are independent — you can set either, both, or
+  // neither. (Sometimes you know a tile's colour but not its number.)
   const colors = document.getElementById("numpad-colors");
-  if (!cell || cell.num == null) {
-    colors.innerHTML = `<span class="numpad-hint">Pick a number first</span>`;
-  } else if (cell.num === 5) {
+  if (cell && cell.num === 5) {
     colors.innerHTML = `<span class="numpad-hint">5s are always green</span>`;
   } else {
     colors.innerHTML = ["black", "white"].map((c) =>
-      `<button type="button" class="numpad-color ${c}${cell.color === c ? " active" : ""}" data-color="${c}">${c.toUpperCase()}</button>`
+      `<button type="button" class="numpad-color ${c}${cell && cell.color === c ? " active" : ""}" data-color="${c}">${c.toUpperCase()}</button>`
     ).join("");
     colors.querySelectorAll(".numpad-color").forEach((btn) => {
       btn.addEventListener("click", () => setNumpadColor(btn.dataset.color));
@@ -724,6 +749,9 @@ function setNumpadNum(n) {
   const current = notepad.cells[user][i];
   if (n === 5) {
     notepad.cells[user][i] = { num: 5, color: "green" };
+  } else if (current && current.num === n) {
+    // Tapping the active number clears just the number, keeping any colour.
+    notepad.cells[user][i] = current.color ? { color: current.color } : null;
   } else {
     const keep = current && current.color && current.color !== "green"
       ? { color: current.color } : {};
@@ -736,11 +764,14 @@ function setNumpadNum(n) {
 
 function setNumpadColor(c) {
   const { user, i } = numpadTarget;
-  const cell = notepad.cells[user][i];
-  if (!cell || cell.num == null) return;
+  let cell = notepad.cells[user][i];
+  if (cell && cell.num === 5) return; // 5s are locked to green
+  if (!cell) cell = notepad.cells[user][i] = {};
   // Toggle: tapping the active colour clears it.
   if (cell.color === c) delete cell.color;
   else cell.color = c;
+  // A cell with neither a number nor a colour is empty.
+  if (cell.num == null && !cell.color) notepad.cells[user][i] = null;
   saveNotepad();
   renderNumpad();
   renderNotepadGrid(gameState);
@@ -763,7 +794,7 @@ document.getElementById("notepad-clear").addEventListener("click", () => {
   notepad = { numbers: {}, cells: {} };
   saveNotepad();
   if (gameState) {
-    renderNumberTracker();
+    renderNumberTracker(gameState);
     renderNotepadGrid(gameState);
   }
 });
@@ -804,7 +835,7 @@ function openGuessModal() {
     slots.querySelectorAll(".guess-slot").forEach((row, i) => {
       const cell = notes[i];
       if (!cell) return;
-      row.querySelector(".guess-num").value = String(cell.num);
+      if (cell.num != null) row.querySelector(".guess-num").value = String(cell.num);
       if (cell.num !== 5 && cell.color) {
         row.querySelectorAll(".color-btn").forEach((b) => b.classList.toggle("selected", b.dataset.color === cell.color));
       }
