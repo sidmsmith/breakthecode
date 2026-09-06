@@ -532,7 +532,11 @@ function renderGame(state) {
     targetInfo.textContent = `Guess the ${state.centralCount} hidden central tiles to win. One guess only!`;
   }
 
-  document.getElementById("deck-count").textContent = `(${state.deckRemaining})`;
+  // Questions left in the whole game (board + draw pile). The board empties
+  // only once the draw pile is gone, then the game ends — so this counts down
+  // by 1 per question, from 21 to 0.
+  const questionsLeft = (state.board?.length || 0) + state.deckRemaining;
+  document.getElementById("deck-count").textContent = `(${questionsLeft})`;
 
   const askModeHint = document.getElementById("ask-mode-hint");
   const askModeText = state.playerCount === 4
@@ -545,6 +549,9 @@ function renderGame(state) {
 
   const board = document.getElementById("card-board");
   const canAct = state.phase === "playing" && myTurn;
+  // ASK stays clickable when it's not your turn (you can still browse the
+  // questions) but dims to match a disabled GUESS.
+  document.getElementById("ask-btn").classList.toggle("btn-inactive", !canAct);
   board.innerHTML = state.board.map((c) =>
     `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>${c.text}</button>`
   ).join("");
