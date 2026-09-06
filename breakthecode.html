@@ -115,6 +115,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="guess-result-modal">
+  <div class="modal-card guess-result-card">
+    <div class="guess-result-icon" id="guess-result-icon"></div>
+    <div class="guess-result-text" id="guess-result-text"></div>
+    <button class="btn" id="guess-result-close" type="button">OK</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="gameover-modal">
   <div class="modal-card">
     <div class="modal-body">
@@ -421,6 +429,11 @@ function mpSubscribeRoom(roomId) {
   mpRoomChannel.subscribe("state-update", () => {
     if (inActiveGame) refreshGameState();
   });
+  mpRoomChannel.subscribe("guess-made", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (inActiveGame) showGuessResult(d);
+  });
   mpRoomChannel.subscribe("room-abandoned", (msg) => {
     let d = msg.data;
     if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
@@ -500,6 +513,7 @@ function renderGame(state) {
     statusText = "Game over";
   } else {
     statusText = myTurn ? "YOUR TURN" : `${state.currentPlayer.toUpperCase()}'S TURN`;
+    if (state.closingRound) statusText += " · FINAL ROUND";
   }
   document.getElementById("turn-status").textContent = statusText;
 
@@ -1039,7 +1053,36 @@ document.getElementById("guess-submit").addEventListener("click", async () => {
   }
 });
 
+// Broadcast to every player when someone guesses: green for correct, red for wrong.
+function showGuessResult({ username, correct, gameOver }) {
+  const modal = document.getElementById("guess-result-modal");
+  const card = modal.querySelector(".guess-result-card");
+  card.classList.toggle("correct", !!correct);
+  card.classList.toggle("wrong", !correct);
+  document.getElementById("guess-result-icon").textContent = correct ? "✓" : "✕";
+  const who = (username || "someone").toUpperCase();
+  document.getElementById("guess-result-text").innerHTML = correct
+    ? `<strong>${who}</strong> cracked the code!` +
+      (gameOver ? "" : `<br><span class="guess-result-sub">Final turn for everyone still in.</span>`)
+    : `<strong>${who}</strong> guessed — <span class="guess-result-sub">not the code.</span>`;
+  modal.classList.add("open");
+  clearTimeout(showGuessResult._t);
+  showGuessResult._t = setTimeout(
+    () => modal.classList.remove("open"),
+    correct ? 3800 : 2800
+  );
+}
+function closeGuessResult() {
+  clearTimeout(showGuessResult._t);
+  document.getElementById("guess-result-modal").classList.remove("open");
+}
+document.getElementById("guess-result-close").addEventListener("click", closeGuessResult);
+document.getElementById("guess-result-modal").addEventListener("click", (e) => {
+  if (e.target.id === "guess-result-modal") closeGuessResult();
+});
+
 function showGameOver(state) {
+  closeGuessResult(); // don't stack under the game-over card
   const me = getUsername();
   const won = state.winners.includes(me);
   const title = state.winners.length === 0

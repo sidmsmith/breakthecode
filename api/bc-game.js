@@ -172,6 +172,12 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: err.message });
         }
         await saveState(client, room_id, state);
+        const lastGuess = [...state.log].reverse().find((e) => e.type === "guess");
+        await ablyPublish(roomChannel(room_id), "guess-made", {
+          username: user,
+          correct: !!lastGuess?.correct,
+          gameOver: state.phase === "game_over",
+        });
         await ablyPublish(roomChannel(room_id), "state-update", {});
         if (state.phase === "game_over") {
           await client.query(`UPDATE bc_rooms SET status='finished', ended_at=NOW() WHERE id=$1`, [room_id]);

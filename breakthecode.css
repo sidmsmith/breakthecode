@@ -547,6 +547,22 @@ header {
 #gameover-body .hand-row { justify-content: center; }
 #gameover-body .panel-title { justify-content: center; margin-bottom: 6px; }
 
+/* Guess announcement (shown to every player on any guess) */
+.guess-result-card {
+  max-width: 340px;
+  text-align: center;
+  padding: 26px 20px 18px;
+  border-width: 2px;
+}
+.guess-result-card.correct { border-color: var(--ok); }
+.guess-result-card.wrong { border-color: var(--bad); }
+.guess-result-icon { font-size: 2.6rem; font-weight: 900; line-height: 1; margin-bottom: 10px; }
+.guess-result-card.correct .guess-result-icon { color: var(--ok); }
+.guess-result-card.wrong .guess-result-icon { color: var(--bad); }
+.guess-result-text { font-size: 1rem; line-height: 1.45; margin-bottom: 16px; }
+.guess-result-sub { color: var(--muted); font-size: 0.85rem; }
+.guess-result-card .btn { width: 100%; }
+
 /* Modals */
 .modal-overlay {
   display: none;
