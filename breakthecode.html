@@ -639,9 +639,14 @@ function positionLetters(state) {
   return ["a", "b", "c", "d", "e"].slice(0, n);
 }
 
-// Every tile is "enabled" (still in play) by default. Tapping a chip disables
-// it — struck through with a red ✕ — for numbers you've ruled out.
-// notepad.numbers[key] === true  ⇒  disabled.
+// Every tile is "unknown" by default. Clicking a chip cycles its mark:
+//   unknown → "x" (ruled out, red ✕) → "o" (confirmed, green ○) → unknown.
+// Legacy notes stored `true`; treat that as "x".
+const NUM_MARK_NEXT = { x: "o", o: null };
+function numMark(key) {
+  const v = notepad.numbers[key];
+  return v === true ? "x" : (v || null);
+}
 function ownHandTileKeys(state) {
   const keys = [];
   let fifths = 0;
@@ -652,12 +657,12 @@ function ownHandTileKeys(state) {
   return keys;
 }
 
-// Your own tiles can't be part of the answer, so disable them once, up front.
+// Your own tiles can't be part of the answer, so rule them out once, up front.
 function autoDisableOwnHand(state) {
   if (!state || notepad.autoDisabledHand) return;
   const keys = ownHandTileKeys(state);
   if (!keys.length) return;
-  for (const key of keys) notepad.numbers[key] = true;
+  for (const key of keys) if (!notepad.numbers[key]) notepad.numbers[key] = "x";
   notepad.autoDisabledHand = true;
   saveNotepad();
 }
@@ -672,15 +677,19 @@ function renderNumberTracker(state) {
   }
   el.innerHTML = tiles.map((t) => {
     const key = `${t.num}-${t.color}${t.dup || ""}`;
-    const disabled = !!notepad.numbers[key];
-    return `<button type="button" class="num-chip ${COLOR_STYLE[t.color]}${disabled ? " disabled" : ""}" data-key="${key}"><span class="num-chip-val">${t.num}</span></button>`;
+    const mark = numMark(key);
+    const markClass = mark ? ` mark-${mark}` : "";
+    return `<button type="button" class="num-chip ${COLOR_STYLE[t.color]}${markClass}" data-key="${key}"><span class="num-chip-val">${t.num}</span></button>`;
   }).join("");
   el.querySelectorAll(".num-chip").forEach((btn) => {
     btn.addEventListener("click", () => {
       const key = btn.dataset.key;
-      notepad.numbers[key] = !notepad.numbers[key];
+      const next = numMark(key) ? NUM_MARK_NEXT[numMark(key)] : "x";
+      if (next) notepad.numbers[key] = next;
+      else delete notepad.numbers[key];
       saveNotepad();
-      btn.classList.toggle("disabled", notepad.numbers[key]);
+      btn.classList.remove("mark-x", "mark-o");
+      if (next) btn.classList.add(`mark-${next}`);
     });
   });
 }

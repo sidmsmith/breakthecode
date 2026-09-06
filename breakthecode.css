@@ -338,7 +338,8 @@ header {
   box-shadow: inset 0 0 0 1px rgba(150, 150, 150, 0.3);
 }
 .num-chip-val { line-height: 1; }
-.num-chip.disabled::after {
+/* Click cycles: plain → red ✕ (ruled out) → green ○ (confirmed) → plain. */
+.num-chip.mark-x::after {
   content: "\2715";
   position: absolute;
   inset: 0;
@@ -350,6 +351,15 @@ header {
   font-weight: 900;
   pointer-events: none;
   text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
+}
+.num-chip.mark-o::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 2px solid var(--ok);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9), inset 0 0 2px rgba(0, 0, 0, 0.6);
 }
 .num-chip.tile-black { background: #111; color: #fff; }
 .num-chip.tile-white { background: #f2f2f0; color: #111; }
