@@ -99,6 +99,20 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="numpad-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title" id="numpad-title">SET TILE</span>
+      <button class="modal-x" id="numpad-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="numpad-keys" id="numpad-keys"></div>
+      <div class="numpad-colors" id="numpad-colors"></div>
+      <button class="btn" id="numpad-erase" type="button" style="width:100%">CLEAR THIS TILE</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="gameover-modal">
   <div class="modal-card">
     <div class="modal-body">
@@ -625,19 +639,12 @@ function ensureCellsShape(state) {
 }
 
 function noteCellHtml(username, i, cell) {
-  const isFive = cell?.num === 5;
+  const hasNum = cell && cell.num != null;
+  const colorClass = cell?.color ? ` note-cell-${cell.color}` : "";
   return `
-    <div class="note-cell" data-user="${username}" data-i="${i}">
-      <select class="note-num">
-        <option value="">–</option>
-        ${Array.from({ length: 10 }, (_, n) => `<option value="${n}" ${cell?.num === n ? "selected" : ""}>${n}</option>`).join("")}
-      </select>
-      <div class="note-colors">
-        <button type="button" class="note-dot black${cell?.color === "black" ? " selected" : ""}" data-color="black" ${isFive ? 'style="display:none"' : ""}></button>
-        <button type="button" class="note-dot green${cell?.color === "green" ? " selected" : ""}" data-color="green" ${isFive ? "" : 'style="display:none"'}></button>
-        <button type="button" class="note-dot white${cell?.color === "white" ? " selected" : ""}" data-color="white" ${isFive ? 'style="display:none"' : ""}></button>
-      </div>
-    </div>`;
+    <button type="button" class="note-cell${hasNum ? " filled" : ""}${colorClass}" data-user="${username}" data-i="${i}">
+      <span class="note-cell-num">${hasNum ? cell.num : "–"}</span>
+    </button>`;
 }
 
 function renderNotepadGrid(state) {
@@ -660,54 +667,96 @@ function renderNotepadGrid(state) {
   grid.innerHTML = html;
 
   grid.querySelectorAll(".note-cell").forEach((cellEl) => {
-    const user = cellEl.dataset.user;
-    const i = Number(cellEl.dataset.i);
-    const sel = cellEl.querySelector(".note-num");
-    const dots = [...cellEl.querySelectorAll(".note-dot")];
-
-    function syncDotVisibility() {
-      const isFive = sel.value === "5";
-      dots.forEach((d) => {
-        d.style.display = (d.dataset.color === "green") === isFive ? "" : "none";
-      });
-    }
-
-    sel.addEventListener("change", () => {
-      if (sel.value === "") {
-        notepad.cells[user][i] = null;
-      } else {
-        const num = Number(sel.value);
-        if (num === 5) {
-          // Only green 5s exist, so a 5 defaults to green.
-          notepad.cells[user][i] = { num: 5, color: "green" };
-        } else {
-          // Set the number only — never auto-pick a color. Preserve an
-          // existing color pick if the user already made one.
-          const current = notepad.cells[user][i];
-          const keep = current && current.color && current.color !== "green"
-            ? { color: current.color } : {};
-          notepad.cells[user][i] = { num, ...keep };
-        }
-      }
-      saveNotepad();
-      syncDotVisibility();
-      dots.forEach((d) => d.classList.toggle("selected", notepad.cells[user][i]?.color === d.dataset.color));
-    });
-
-    dots.forEach((d) => {
-      d.addEventListener("click", () => {
-        if (sel.value === "" || sel.value === "5") return;
-        const num = Number(sel.value);
-        const already = notepad.cells[user][i]?.color === d.dataset.color;
-        // Toggle: clicking the active color clears it; clicking another
-        // color switches to it (deselecting whatever was set).
-        notepad.cells[user][i] = already ? { num } : { num, color: d.dataset.color };
-        saveNotepad();
-        dots.forEach((x) => x.classList.toggle("selected", notepad.cells[user][i]?.color === x.dataset.color));
-      });
-    });
+    cellEl.addEventListener("click", () =>
+      openNumpad(cellEl.dataset.user, Number(cellEl.dataset.i)));
   });
 }
+
+// ── Notepad number pad ───────────────────────────────────────────────────────
+// A native <select> per cell was unusable on mobile (tiny target, dismissed by
+// scrolling). This is a full-width tap pad instead: number first, then colour.
+let numpadTarget = null;
+
+function openNumpad(user, i) {
+  if (!gameState) return;
+  numpadTarget = { user, i };
+  const letter = (positionLetters(gameState)[i] || "").toUpperCase();
+  document.getElementById("numpad-title").textContent = `${user.toUpperCase()} · ${letter}`;
+  renderNumpad();
+  document.getElementById("numpad-modal").classList.add("open");
+}
+
+function closeNumpad() {
+  numpadTarget = null;
+  document.getElementById("numpad-modal").classList.remove("open");
+}
+
+function renderNumpad() {
+  if (!numpadTarget) return;
+  const { user, i } = numpadTarget;
+  const cell = notepad.cells[user]?.[i] || null;
+
+  const keys = document.getElementById("numpad-keys");
+  keys.innerHTML = Array.from({ length: 10 }, (_, n) =>
+    `<button type="button" class="numpad-key${cell && cell.num === n ? " active" : ""}" data-num="${n}">${n}</button>`
+  ).join("");
+  keys.querySelectorAll(".numpad-key").forEach((btn) => {
+    btn.addEventListener("click", () => setNumpadNum(Number(btn.dataset.num)));
+  });
+
+  const colors = document.getElementById("numpad-colors");
+  if (!cell || cell.num == null) {
+    colors.innerHTML = `<span class="numpad-hint">Pick a number first</span>`;
+  } else if (cell.num === 5) {
+    colors.innerHTML = `<span class="numpad-hint">5s are always green</span>`;
+  } else {
+    colors.innerHTML = ["black", "white"].map((c) =>
+      `<button type="button" class="numpad-color ${c}${cell.color === c ? " active" : ""}" data-color="${c}">${c.toUpperCase()}</button>`
+    ).join("");
+    colors.querySelectorAll(".numpad-color").forEach((btn) => {
+      btn.addEventListener("click", () => setNumpadColor(btn.dataset.color));
+    });
+  }
+}
+
+function setNumpadNum(n) {
+  const { user, i } = numpadTarget;
+  const current = notepad.cells[user][i];
+  if (n === 5) {
+    notepad.cells[user][i] = { num: 5, color: "green" };
+  } else {
+    const keep = current && current.color && current.color !== "green"
+      ? { color: current.color } : {};
+    notepad.cells[user][i] = { num: n, ...keep };
+  }
+  saveNotepad();
+  renderNumpad();
+  renderNotepadGrid(gameState);
+}
+
+function setNumpadColor(c) {
+  const { user, i } = numpadTarget;
+  const cell = notepad.cells[user][i];
+  if (!cell || cell.num == null) return;
+  // Toggle: tapping the active colour clears it.
+  if (cell.color === c) delete cell.color;
+  else cell.color = c;
+  saveNotepad();
+  renderNumpad();
+  renderNotepadGrid(gameState);
+}
+
+document.getElementById("numpad-close").addEventListener("click", closeNumpad);
+document.getElementById("numpad-modal").addEventListener("click", (e) => {
+  if (e.target.id === "numpad-modal") closeNumpad();
+});
+document.getElementById("numpad-erase").addEventListener("click", () => {
+  const { user, i } = numpadTarget;
+  notepad.cells[user][i] = null;
+  saveNotepad();
+  renderNumpad();
+  renderNotepadGrid(gameState);
+});
 
 document.getElementById("notepad-clear").addEventListener("click", () => {
   if (!confirm("Clear all your notes for this game?")) return;

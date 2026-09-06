@@ -307,39 +307,61 @@ header {
   text-transform: uppercase;
 }
 .note-cell {
-  background: var(--surface);
+  background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 4px;
+  padding: 6px 2px;
+  min-height: 40px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
 }
-.note-num {
-  width: 100%;
+.note-cell:hover { border-color: var(--accent); }
+.note-cell-num { font-size: 1rem; font-weight: 800; line-height: 1; }
+.note-cell:not(.filled) .note-cell-num { color: var(--muted); }
+.note-cell-black { background: #111; border-color: #333; }
+.note-cell-black .note-cell-num { color: #fff; }
+.note-cell-white { background: #f2f2f0; border-color: #f2f2f0; }
+.note-cell-white .note-cell-num { color: #111; }
+.note-cell-green { background: var(--accent); border-color: var(--accent); }
+.note-cell-green .note-cell-num { color: #0d1a08; }
+
+/* Number-pad modal (replaces the per-cell native <select>) */
+.numpad-keys {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.numpad-key {
+  aspect-ratio: 1;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   background: var(--surface-alt);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-align: center;
-  padding: 2px;
-}
-.note-colors { display: flex; gap: 4px; }
-.note-dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
+  font-size: 1.3rem;
+  font-weight: 800;
   cursor: pointer;
-  padding: 0;
 }
-.note-dot.black { background: #111; }
-.note-dot.white { background: #f2f2f0; }
-.note-dot.green { background: var(--accent); }
-.note-dot.selected { box-shadow: 0 0 0 2px var(--accent); }
+.numpad-key.active { background: var(--accent); color: #0d1a08; border-color: var(--accent); }
+.numpad-colors { display: flex; gap: 8px; min-height: 40px; align-items: center; }
+.numpad-color {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.numpad-color.active { border-color: var(--accent); background: var(--accent); color: #0d1a08; }
+.numpad-color.white.active { background: #f2f2f0; color: #111; border-color: #f2f2f0; }
+.numpad-hint { font-size: 0.8rem; color: var(--muted); }
 .log-answers { color: var(--muted); margin-top: 2px; }
 .log-entry.log-correct { border-color: var(--ok); }
 .log-entry.log-wrong { border-color: var(--bad); }
