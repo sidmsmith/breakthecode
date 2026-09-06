@@ -678,11 +678,15 @@ function renderNotepadGrid(state) {
       } else {
         const num = Number(sel.value);
         if (num === 5) {
+          // Only green 5s exist, so a 5 defaults to green.
           notepad.cells[user][i] = { num: 5, color: "green" };
         } else {
+          // Set the number only — never auto-pick a color. Preserve an
+          // existing color pick if the user already made one.
           const current = notepad.cells[user][i];
-          const color = current && current.color !== "green" ? current.color : "black";
-          notepad.cells[user][i] = { num, color };
+          const keep = current && current.color && current.color !== "green"
+            ? { color: current.color } : {};
+          notepad.cells[user][i] = { num, ...keep };
         }
       }
       saveNotepad();
@@ -693,10 +697,13 @@ function renderNotepadGrid(state) {
     dots.forEach((d) => {
       d.addEventListener("click", () => {
         if (sel.value === "" || sel.value === "5") return;
-        notepad.cells[user][i] = { num: Number(sel.value), color: d.dataset.color };
+        const num = Number(sel.value);
+        const already = notepad.cells[user][i]?.color === d.dataset.color;
+        // Toggle: clicking the active color clears it; clicking another
+        // color switches to it (deselecting whatever was set).
+        notepad.cells[user][i] = already ? { num } : { num, color: d.dataset.color };
         saveNotepad();
-        dots.forEach((x) => x.classList.remove("selected"));
-        d.classList.add("selected");
+        dots.forEach((x) => x.classList.toggle("selected", notepad.cells[user][i]?.color === x.dataset.color));
       });
     });
   });
@@ -749,7 +756,7 @@ function openGuessModal() {
       const cell = notes[i];
       if (!cell) return;
       row.querySelector(".guess-num").value = String(cell.num);
-      if (cell.num !== 5) {
+      if (cell.num !== 5 && cell.color) {
         row.querySelectorAll(".color-btn").forEach((b) => b.classList.toggle("selected", b.dataset.color === cell.color));
       }
     });

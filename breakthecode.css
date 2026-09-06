@@ -187,13 +187,13 @@ header {
 
 .hand-row {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 5px;
+  flex-wrap: nowrap;
 }
 .tile {
-  width: 42px;
-  height: 52px;
-  border-radius: 8px;
+  width: 34px;
+  height: 44px;
+  border-radius: 7px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -202,8 +202,8 @@ header {
   flex-shrink: 0;
   border: 1px solid var(--border);
 }
-.tile-pos { font-size: 0.55rem; opacity: 0.7; line-height: 1; }
-.tile-num { font-size: 1.15rem; line-height: 1.2; }
+.tile-pos { font-size: 0.5rem; opacity: 0.7; line-height: 1; }
+.tile-num { font-size: 1rem; line-height: 1.2; }
 .tile-black { background: #111; color: #fff; }
 .tile-white { background: #f2f2f0; color: #111; }
 .tile-green { background: var(--accent); color: #0d1a08; }
