@@ -156,13 +156,22 @@ header {
 .turn-status { font-weight: 800; font-size: 1rem; letter-spacing: 0.02em; }
 .opp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* While the caret floats centred at the top (collapsed header, in game),
+   keep the turn text and chips clear of the central ~64px band. */
+#app:has(#view-game.active):not(.hdr-open) .turn-status,
+#app:has(#view-game.active):not(.hdr-open) .opp-chips {
+  max-width: calc(50% - 30px);
+}
+#app:has(#view-game.active):not(.hdr-open) .opp-chips { justify-content: flex-end; }
+
 .player-chip {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
+  white-space: nowrap;
 }
 .player-chip.host { border-color: var(--accent); color: var(--accent); }
 .player-chip.won { border-color: var(--ok); color: var(--ok); }
