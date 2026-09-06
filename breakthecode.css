@@ -176,6 +176,8 @@ header {
 .player-chip.host { border-color: var(--accent); color: var(--accent); }
 .player-chip.won { border-color: var(--ok); color: var(--ok); }
 .player-chip.lost { border-color: var(--bad); color: var(--bad); opacity: 0.7; }
+.player-chip.me { border-color: var(--muted); color: var(--text); }
+.player-chip.current { background: var(--accent); border-color: var(--accent); color: #0d1a08; }
 
 .board-layout {
   flex: 1;
@@ -201,28 +203,38 @@ header {
   gap: 6px;
   flex-shrink: 0;
 }
-.deck-count { font-weight: 500; opacity: 0.85; font-size: 0.65rem; }
-.notepad-hint { font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: normal; }
-.notepad-clear {
-  margin-left: auto;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: 0.05em;
+/* Keeps "ASK" optically centred on the button; the count floats at the edge. */
+.deck-count {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 500;
+  opacity: 0.75;
+  font-size: 0.7rem;
 }
-.notepad-clear:hover { color: var(--bad); border-color: var(--bad); }
+.notepad-clear {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.notepad-clear:hover { color: var(--bad); }
+.notepad-clear svg { width: 100%; height: 100%; }
 
 .left-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.left-actions .btn { width: 100%; padding: 10px; }
+.left-actions .btn { width: 100%; padding: 10px; position: relative; text-align: center; }
 
 .hand-row {
   display: flex;
@@ -292,16 +304,22 @@ header {
 .log-entry.log-empty { color: var(--muted); text-align: center; }
 
 /* Number tracker — every tile starts enabled; tap to rule one out (red ✕).
-   All 20 tiles stay on one row: columns shrink to fit and right-align, so
-   any spare width collects on the left. */
-.number-tracker {
-  display: grid;
-  grid-template-columns: repeat(20, minmax(0, 26px));
-  justify-content: end;
-  gap: 2px;
+   All 20 tiles stay on one row and fill the width evenly (with a small trash
+   icon at the end); the clear button and this row share .number-tracker-row. */
+.number-tracker-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
+}
+.number-tracker {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+  gap: 2px;
 }
 .num-chip {
   position: relative;
@@ -311,7 +329,7 @@ header {
   border: none;
   border-radius: 4px;
   font-weight: 800;
-  font-size: clamp(0.5rem, 2.4vw, 0.75rem);
+  font-size: clamp(0.5rem, 2.2vw, 0.95rem);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -348,7 +366,7 @@ header {
 }
 .note-row {
   display: grid;
-  grid-template-columns: 92px repeat(var(--note-cols, 5), minmax(0, 42px));
+  grid-template-columns: 62px repeat(var(--note-cols, 5), minmax(0, 100px));
   gap: 4px;
   align-items: center;
 }
@@ -380,7 +398,7 @@ header {
 .note-hint.pin { color: var(--text); border-color: var(--accent-dark); }
 .note-hint.elim { opacity: 0.5; }
 .note-row-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
   color: var(--muted);
   overflow: hidden;
@@ -399,7 +417,7 @@ header {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 2px;
-  min-height: 40px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -408,7 +426,7 @@ header {
   font: inherit;
 }
 .note-cell:hover { border-color: var(--accent); }
-.note-cell-num { font-size: 1rem; font-weight: 800; line-height: 1; }
+.note-cell-num { font-size: 1.15rem; font-weight: 800; line-height: 1; }
 .note-cell:not(.filled) .note-cell-num { color: var(--muted); }
 .note-cell-black { background: #111; border-color: #333; }
 .note-cell-black .note-cell-num { color: #fff; }

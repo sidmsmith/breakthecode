@@ -44,18 +44,18 @@
         <div class="hand-row" id="hand-row"></div>
         <div class="target-info" id="target-info"></div>
         <div class="left-actions">
-          <button class="btn btn-primary" id="ask-btn" type="button">ASK <span class="deck-count" id="deck-count"></span></button>
+          <button class="btn btn-primary" id="ask-btn" type="button">ASK<span class="deck-count" id="deck-count"></span></button>
           <button class="btn btn-primary btn-guess" id="guess-btn" type="button">GUESS</button>
           <button class="btn" id="history-btn" type="button">HISTORY</button>
         </div>
       </div>
       <div class="panel panel-right">
-        <div class="panel-title">
-          NOTEPAD
-          <span class="notepad-hint">Your private notes — only you can see this</span>
-          <button class="notepad-clear" id="notepad-clear" type="button">CLEAR</button>
+        <div class="number-tracker-row">
+          <div class="number-tracker" id="number-tracker"></div>
+          <button class="notepad-clear" id="notepad-clear" type="button" title="Clear all notes" aria-label="Clear all notes">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14M10 11v6M14 11v6"/></svg>
+          </button>
         </div>
-        <div class="number-tracker" id="number-tracker"></div>
         <div class="notepad-grid" id="notepad-grid"></div>
       </div>
     </div>
@@ -503,18 +503,23 @@ function renderGame(state) {
   }
   document.getElementById("turn-status").textContent = statusText;
 
-  const oppChips = document.getElementById("opp-chips");
-  if (state.playerCount === 2) {
-    const o = state.opponent;
-    const tag = state.turnOrder[0] === o.username ? " (started)" : "";
-    oppChips.innerHTML = `<span class="player-chip">${o.username.toUpperCase()}${tag}</span>`;
-  } else {
-    oppChips.innerHTML = state.opponents.map((o) => {
-      const cls = o.decided === "won" ? "won" : o.decided === "lost" ? "lost" : "";
-      const label = o.decided === "won" ? " ✓" : o.decided === "lost" ? " ✕" : "";
-      return `<span class="player-chip ${cls}">${o.username.toUpperCase()}${label}</span>`;
-    }).join("");
-  }
+  // Every player, in turn order — you included. "*" marks who started (they
+  // get the last word in 2p, and go first each round), so it matters even when
+  // that's you.
+  const starter = state.startingPlayer || state.turnOrder[0];
+  document.getElementById("opp-chips").innerHTML = state.turnOrder.map((u) => {
+    const decided = state.decided ? state.decided[u] : null;
+    const hasLeft = state.left ? state.left[u] : false;
+    const cls = ["player-chip"];
+    if (u === me) cls.push("me");
+    if (decided === "won") cls.push("won");
+    else if (decided === "lost") cls.push("lost");
+    if (hasLeft) cls.push("lost");
+    if (u === state.currentPlayer && state.phase !== "game_over") cls.push("current");
+    const badge = decided === "won" ? " ✓" : decided === "lost" ? " ✕" : hasLeft ? " ⤺" : "";
+    const star = u === starter ? "*" : "";
+    return `<span class="${cls.join(" ")}"${u === starter ? ' title="Started the game"' : ""}>${u.toUpperCase()}${star}${badge}</span>`;
+  }).join("");
 
   document.getElementById("hand-row").innerHTML = (state.myHand || []).map(tileSpan).join("");
 
@@ -525,7 +530,7 @@ function renderGame(state) {
     targetInfo.textContent = `Guess the ${state.centralCount} hidden central tiles to win. One guess only!`;
   }
 
-  document.getElementById("deck-count").textContent = `(${state.deckRemaining} left in draw pile)`;
+  document.getElementById("deck-count").textContent = `(${state.deckRemaining})`;
 
   const askModeHint = document.getElementById("ask-mode-hint");
   const askModeText = state.playerCount === 4
@@ -701,6 +706,13 @@ function noteCellHtml(username, i, cell) {
 // Every question in state.log carries one answer per player. For each opponent
 // we distil their answers into short "Label: value" hints, newest first, shown
 // under their name on the notepad. The full record still lives in HISTORY.
+//
+// TODO(digest-format): make this configurable via a "Digest Format" setting once
+// the notepad look & feel is settled. Candidate knobs: label verbosity
+// (terse "wht" / medium "Whites" / full "Whites: 3"), which answers to show
+// (all vs. only pins + eliminations), sort order, and a per-opponent cap.
+// The green-box (pin) vs. plain (count) vs. dimmed (elim) styling below is also
+// part of that investigation.
 const HINT_LABELS = {
   "odd-count": "Odd",
   "even-count": "Even",
