@@ -59,6 +59,16 @@
         </div>
         <div class="notepad-grid" id="notepad-grid"></div>
       </div>
+      <!-- Desktop-only third column. On wide screens applyLayout() moves the
+           question board and history log in here so they're always visible. -->
+      <aside class="panel panel-rail" id="game-rail">
+        <section class="rail-sec rail-board" id="rail-board">
+          <div class="rail-title">ASK A QUESTION<span class="deck-count" id="deck-count-rail"></span></div>
+        </section>
+        <section class="rail-sec rail-history" id="rail-history">
+          <div class="rail-title">HISTORY</div>
+        </section>
+      </aside>
     </div>
   </div>
 </div>
@@ -516,7 +526,9 @@ function renderGame(state) {
     statusText = myTurn ? "YOUR TURN" : `${state.currentPlayer.toUpperCase()}'S TURN`;
     if (state.closingRound) statusText += " · FINAL ROUND";
   }
-  document.getElementById("turn-status").textContent = statusText;
+  const turnStatusEl = document.getElementById("turn-status");
+  turnStatusEl.textContent = statusText;
+  turnStatusEl.classList.toggle("my-turn", myTurn && state.phase === "playing");
 
   // Every player, in turn order starting from whoever went first — you
   // included. So the "*" (starter; they get the last word in 2p and lead each
@@ -552,6 +564,8 @@ function renderGame(state) {
   // by 1 per question, from 21 to 0.
   const questionsLeft = (state.board?.length || 0) + state.deckRemaining;
   document.getElementById("deck-count").textContent = `(${questionsLeft})`;
+  const deckCountRail = document.getElementById("deck-count-rail");
+  if (deckCountRail) deckCountRail.textContent = ` · ${questionsLeft} left`;
 
   const askModeHint = document.getElementById("ask-mode-hint");
   const askModeText = state.playerCount === 4
@@ -567,6 +581,7 @@ function renderGame(state) {
   // ASK stays clickable when it's not your turn (you can still browse the
   // questions) but dims to match a disabled GUESS.
   document.getElementById("ask-btn").classList.toggle("btn-inactive", !canAct);
+  document.getElementById("rail-board").classList.toggle("your-turn", canAct); // desktop cue
   board.innerHTML = state.board.map((c) =>
     `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>
        <span class="card-btn-text">${c.text}</span>
@@ -1670,6 +1685,31 @@ document.getElementById("leave-game-btn").addEventListener("click", mpLeaveGame)
 document.getElementById("hdr-toggle").addEventListener("click", () => {
   document.getElementById("app").classList.toggle("hdr-open");
 });
+
+// ── Wide-screen layout ──────────────────────────────────────────────────────
+// On desktop the question board + history are permanent side-rail panels
+// instead of modals. Only the DOM home of three nodes changes; everything that
+// renders into them keeps working by id. Below the breakpoint nothing moves.
+const wideMQ = window.matchMedia("(min-width: 1200px)"); // keep in sync with breakthecode.css
+function applyLayout() {
+  const wide = wideMQ.matches;
+  const askModeHint = document.getElementById("ask-mode-hint");
+  const cardBoard = document.getElementById("card-board");
+  const logList = document.getElementById("log-list");
+  if (wide) {
+    document.getElementById("rail-board").append(askModeHint, cardBoard);
+    document.getElementById("rail-history").append(logList);
+    // The board/history modals never open on desktop; make sure they aren't stuck open.
+    document.getElementById("ask-modal").classList.remove("open");
+    document.getElementById("history-modal").classList.remove("open");
+  } else {
+    const askBody = document.querySelector("#ask-modal .modal-body");
+    askBody.append(askModeHint, cardBoard);
+    document.querySelector("#history-modal .modal-body").append(logList);
+  }
+}
+wideMQ.addEventListener("change", applyLayout);
+applyLayout();
 
 window.addEventListener("resize", () => {});
 

@@ -187,6 +187,7 @@ header {
   display: flex;
   gap: 10px;
 }
+#game-rail { display: none; } /* desktop-only 3rd column; see the wide-screen @media */
 .panel {
   min-height: 0;
   display: flex;
@@ -690,3 +691,138 @@ header {
   z-index: 200;
 }
 .toast.show { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WIDE SCREEN (laptop / desktop) — a 3-column "cockpit".
+   Everything below this @media is scoped to >=1200px; phones and tablets are
+   completely untouched. Question board + history become permanent side panels
+   (applyLayout() in the page moves those nodes here); the ASK/HISTORY buttons
+   and the mobile header-caret are hidden.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1200px) {
+  #app { padding: 14px 24px; }
+  #app:has(#view-game.active) { max-width: 1600px; }
+  #view-game { gap: 12px; }
+
+  /* header always shown; drop the mobile caret and its layout hacks */
+  #app:has(#view-game.active) header { display: flex; }
+  #app:has(#view-game.active) #hdr-toggle { display: none; }
+  #app:has(#view-game.active):not(.hdr-open) .turn-status,
+  #app:has(#view-game.active):not(.hdr-open) .opp-chips { max-width: none; }
+  .leave-btn.hdr-leave { font-size: 0.8rem; padding: 7px 14px; }
+
+  /* turn bar -> full-width strip under the header */
+  .turn-bar {
+    flex-wrap: nowrap;
+    align-items: center;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .turn-status { font-size: 1.25rem; }
+  .turn-status.my-turn { color: var(--accent); }
+  .opp-chips { gap: 8px; }
+  .player-chip { font-size: 0.82rem; padding: 4px 12px; }
+
+  /* 3 columns: YOU | NOTEPAD | BOARD + HISTORY */
+  .board-layout {
+    display: grid;
+    grid-template-columns:
+      clamp(232px, 17vw, 264px)
+      minmax(0, 1fr)
+      clamp(340px, 25vw, 400px);
+    gap: clamp(16px, 1.4vw, 22px);
+  }
+  .panel { gap: 14px; }
+  .panel-left, .panel-right {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .panel-title { font-size: 0.78rem; }
+
+  /* left column — YOU */
+  .hand-row { gap: 6px; }
+  .tile { width: 44px; height: 58px; border-radius: 8px; }
+  .tile-pos { font-size: 0.58rem; }
+  .tile-num { font-size: 1.4rem; }
+  .target-info {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-alt);
+    color: var(--text);
+  }
+  #ask-btn, #history-btn { display: none; }
+  .left-actions { margin-top: auto; }        /* pin GUESS to the bottom */
+  .left-actions .btn { padding: 15px; font-size: 1.05rem; }
+
+  /* center column — NOTEPAD */
+  .number-tracker-row { gap: 8px; padding-bottom: 8px; }
+  .number-tracker { gap: 3px; }
+  .num-chip { font-size: clamp(0.72rem, 1.1vw, 1.05rem); border-radius: 6px; }
+  .notepad-clear { width: 30px; height: 30px; }
+  .notepad-clear svg { width: 17px; height: 17px; }
+  .notepad-grid { gap: 16px; }
+  .note-block {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-alt);
+    gap: 10px;
+  }
+  .note-row { grid-template-columns: 104px repeat(var(--note-cols, 5), minmax(0, 100px)); gap: 8px; }
+  .note-row-label { font-size: 1rem; }
+  .note-col-label { font-size: 0.92rem; }
+  .note-cell { min-height: 66px; border-radius: 10px; }
+  .note-cell-num { font-size: 1.7rem; }
+  .note-hints { gap: 6px 7px; }
+  .note-hint { font-size: 0.78rem; padding: 2px 8px; border-radius: 5px; }
+
+  /* right column — BOARD + HISTORY, both permanent */
+  #game-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+  }
+  .rail-sec {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .rail-board { flex: 0 1 auto; }          /* fits its 6 cards; scrolls if squeezed */
+  .rail-history { flex: 1 1 240px; min-height: 170px; }
+  .rail-board.your-turn { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .rail-title {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+  #deck-count-rail { position: static; transform: none; font-weight: 500; opacity: 0.75; font-size: 0.78rem; }
+
+  #ask-mode-hint { flex-shrink: 0; margin-bottom: 8px; font-size: 0.72rem; }
+  .card-board {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .card-btn { padding: 9px 11px; font-size: 0.85rem; line-height: 1.28; }
+  .card-btn-hint { font-size: 0.71rem; margin-top: 2px; }
+
+  .log-list { gap: 8px; }
+  .log-entry { font-size: 0.82rem; padding: 8px 10px; }
+}
