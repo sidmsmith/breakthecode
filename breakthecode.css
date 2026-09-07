@@ -825,4 +825,16 @@ header {
 
   .log-list { gap: 8px; }
   .log-entry { font-size: 0.82rem; padding: 8px 10px; }
+
+  /* home / landing — a bit more generous, still a centred column */
+  #app:has(#view-home.active) { max-width: 560px; }
+  .home-title { font-size: 3rem; }
+  .home-sub { max-width: 420px; font-size: 1.05rem; }
+  .user-badge { font-size: 1rem; padding: 10px 22px; }
+  #view-home .btn { font-size: 1rem; padding: 12px 22px; }
+  .logo-text { font-size: 1.05rem; }
+  .logo-icon { font-size: 1.5rem; }
+
+  /* lobby modal a touch wider on desktop */
+  #mp-modal .modal-card { max-width: 460px; }
 }
