@@ -303,7 +303,7 @@ header {
   gap: 12px;
   padding: 16px 8px;
 }
-.card-choice-q { font-size: 0.85rem; font-weight: 700; text-align: center; }
+.card-choice-q { font-size: 0.85rem; font-weight: 700; text-align: center; align-self: stretch; }
 .card-choice-btns { display: flex; gap: 10px; }
 .card-choice-btns .card-choice { min-width: 64px; font-size: 1.2rem; padding: 10px 14px; }
 .card-choice-back { font-size: 0.72rem; }

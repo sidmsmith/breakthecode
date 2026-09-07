@@ -485,6 +485,7 @@ function stopGamePoll() {
 
 let gameState = null;
 let gameRoomHost = null;
+let cardChoiceCard = null; // cardId of an open "1 or 2?" number picker (keeps renderGame from wiping it)
 async function refreshGameState() {
   if (!mpRoomId) return;
   try {
@@ -582,19 +583,29 @@ function renderGame(state) {
   // questions) but dims to match a disabled GUESS.
   document.getElementById("ask-btn").classList.toggle("btn-inactive", !canAct);
   document.getElementById("rail-board").classList.toggle("your-turn", canAct); // desktop cue
-  board.innerHTML = state.board.map((c) =>
-    `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>
-       <span class="card-btn-text">${c.text}</span>
-       ${c.hint ? `<span class="card-btn-hint">${c.hint}</span>` : ""}
-     </button>`
-  ).join("");
-  board.querySelectorAll(".card-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const card = state.board.find((c) => c.cardId === btn.dataset.card);
-      if (card && card.choices) showCardChoice(card);
-      else askCard(btn.dataset.card);
+
+  // If a choose-card's number picker is open, leave it up — a background poll
+  // must not wipe it out from under the player. It clears itself once the pick
+  // is made, "back" is hit, or it's no longer this player's turn.
+  const keepChoicePicker = cardChoiceCard && canAct &&
+    state.board.some((c) => c.cardId === cardChoiceCard) &&
+    board.querySelector(".card-choice-prompt");
+  if (!keepChoicePicker) {
+    cardChoiceCard = null;
+    board.innerHTML = state.board.map((c) =>
+      `<button class="card-btn" data-card="${c.cardId}" ${canAct ? "" : "disabled"}>
+         <span class="card-btn-text">${c.text}</span>
+         ${c.hint ? `<span class="card-btn-hint">${c.hint}</span>` : ""}
+       </button>`
+    ).join("");
+    board.querySelectorAll(".card-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const card = state.board.find((c) => c.cardId === btn.dataset.card);
+        if (card && card.choices) showCardChoice(card);
+        else askCard(btn.dataset.card);
+      });
     });
-  });
+  }
 
   const guessBtn = document.getElementById("guess-btn");
   const canGuess =
@@ -619,6 +630,7 @@ function renderGame(state) {
 
 // "Where is your 1 or 2?" style card — swap the board for a number chooser.
 function showCardChoice(card) {
+  cardChoiceCard = card.cardId;
   const board = document.getElementById("card-board");
   board.innerHTML = `
     <div class="card-choice-prompt">
@@ -630,10 +642,14 @@ function showCardChoice(card) {
     </div>`;
   board.querySelectorAll(".card-choice").forEach((b) =>
     b.addEventListener("click", () => askCard(card.cardId, Number(b.dataset.n))));
-  board.querySelector(".card-choice-back").addEventListener("click", () => renderGame(gameState));
+  board.querySelector(".card-choice-back").addEventListener("click", () => {
+    cardChoiceCard = null;
+    renderGame(gameState);
+  });
 }
 
 async function askCard(cardId, choice) {
+  cardChoiceCard = null;
   try {
     const body = { action: "ask", room_id: mpRoomId, username: getUsername(), cardId };
     if (choice != null) body.choice = choice;
@@ -651,14 +667,39 @@ async function askCard(cardId, choice) {
 document.getElementById("ask-btn").addEventListener("click", () => {
   document.getElementById("ask-modal").classList.add("open");
 });
-document.getElementById("ask-close").addEventListener("click", () => {
+function closeAskModal() {
+  cardChoiceCard = null;
   document.getElementById("ask-modal").classList.remove("open");
-});
+  if (gameState) renderGame(gameState);
+}
+document.getElementById("ask-close").addEventListener("click", closeAskModal);
 document.getElementById("history-btn").addEventListener("click", () => {
   document.getElementById("history-modal").classList.add("open");
 });
 document.getElementById("history-close").addEventListener("click", () => {
   document.getElementById("history-modal").classList.remove("open");
+});
+
+// Light-dismiss for the picker-style modals: click the backdrop or press Esc.
+// (Game-over and the lobby are intentionally left sticky.)
+["ask-modal", "history-modal", "guess-modal", "numpad-modal"].forEach((id) => {
+  document.getElementById(id).addEventListener("click", (e) => {
+    if (e.target.id !== id) return;
+    if (id === "numpad-modal") closeNumpad();
+    else if (id === "ask-modal") closeAskModal();
+    else document.getElementById(id).classList.remove("open");
+  });
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const id of ["numpad-modal", "guess-modal", "ask-modal", "history-modal"]) {
+    const m = document.getElementById(id);
+    if (!m.classList.contains("open")) continue;
+    if (id === "numpad-modal") closeNumpad();
+    else if (id === "ask-modal") closeAskModal();
+    else m.classList.remove("open");
+    return; // one modal per keypress
+  }
 });
 
 // ── Notepad — a private per-player scratchpad, never sent to the server ─────
@@ -941,9 +982,7 @@ function setNumpadColor(c) {
 }
 
 document.getElementById("numpad-close").addEventListener("click", closeNumpad);
-document.getElementById("numpad-modal").addEventListener("click", (e) => {
-  if (e.target.id === "numpad-modal") closeNumpad();
-});
+// backdrop / Esc dismissal is wired centrally near the ask-modal handlers
 document.getElementById("numpad-erase").addEventListener("click", () => {
   const { user, i } = numpadTarget;
   notepad.cells[user][i] = null;
